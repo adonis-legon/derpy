@@ -1,0 +1,1 @@
+"""Registry client module for image distribution."""
