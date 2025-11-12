@@ -8,8 +8,10 @@ version = "0.1.0"
 description = "A zero-dependency container tool for building, managing, and distributing OCI-compliant container images"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "Derpy Team", email = "team@derpy.dev" }]
-maintainers = [{ name = "Derpy Team", email = "team@derpy.dev" }]
+authors = [{ name = "Adonis Cesar Legón Campo", email = "alegon@gmail.com" }]
+maintainers = [
+    { name = "Adonis Cesar Legón Campo", email = "alegon@gmail.com" },
+]
 keywords = ["container", "docker", "oci", "cli", "build"]
 classifiers = [
     "Development Status :: 3 - Alpha",

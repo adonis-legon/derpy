@@ -6,5 +6,5 @@ without relying on existing container runtimes like Docker, Podman, or container
 """
 
 __version__ = "0.1.0"
-__author__ = "Derpy Team"
-__email__ = "team@derpy.dev"
+__author__ = "Adonis Cesar Legón Campo"
+__email__ = "alegon@gmail.com"
