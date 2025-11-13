@@ -93,6 +93,9 @@ def config_show(ctx, key: Optional[str]):
             click.echo(f"  Max Layers: {cfg.build_settings.max_layers}")
             click.echo(f"  Compression: {cfg.build_settings.compression}")
             click.echo(f"  Parallel Builds: {cfg.build_settings.parallel_builds}")
+            click.echo(f"  Enable Isolation: {cfg.build_settings.enable_isolation}")
+            click.echo(f"  Base Image Cache Dir: {cfg.build_settings.base_image_cache_dir}")
+            click.echo(f"  Chroot Timeout: {cfg.build_settings.chroot_timeout}s")
             
             if cfg.registry_configs:
                 click.echo(f"\nRegistry Configurations:")
