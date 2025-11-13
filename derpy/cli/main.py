@@ -241,9 +241,13 @@ def build(ctx, context: Path, dockerfile: Path, tag: str):
         config_manager = ConfigManager()
         config = config_manager.get_config()
         
+        # Create storage manager for base image caching
+        storage_manager = ImageManager(config.images_path)
+        
         # Build image
         click.echo("Parsing Dockerfile...")
         build_engine = BuildEngine(
+            storage_manager=storage_manager,
             enable_isolation=config.build_settings.enable_isolation,
             base_image_cache_dir=Path(config.build_settings.base_image_cache_dir).expanduser(),
             chroot_timeout=config.build_settings.chroot_timeout
