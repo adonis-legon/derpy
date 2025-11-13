@@ -182,7 +182,7 @@ def config_set(ctx, key: str, value: str):
 @click.option(
     '-f', '--file',
     'dockerfile',
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    type=click.Path(file_okay=True, dir_okay=False, path_type=Path),
     default='Dockerfile',
     help='Path to Dockerfile (default: Dockerfile in context)'
 )
@@ -208,11 +208,15 @@ def build(ctx, context: Path, dockerfile: Path, tag: str):
         # Resolve paths
         context_path = context.resolve()
         
-        # If dockerfile is relative, resolve it relative to context
-        if not dockerfile.is_absolute():
-            dockerfile_path = (context_path / dockerfile).resolve()
-        else:
+        # If dockerfile is absolute or exists as-is, use it directly
+        # Otherwise, resolve it relative to context
+        if dockerfile.is_absolute():
             dockerfile_path = dockerfile.resolve()
+        elif dockerfile.exists():
+            dockerfile_path = dockerfile.resolve()
+        else:
+            # Try relative to context
+            dockerfile_path = (context_path / dockerfile).resolve()
         
         # Verify dockerfile exists
         if not dockerfile_path.exists():
