@@ -15,6 +15,9 @@ from derpy.core.exceptions import (
     BuildContextError,
     CommandExecutionError,
     LayerCreationError,
+    BaseImageError,
+    IsolationError,
+    FilesystemDiffError,
     StorageError,
     ImageNotFoundError,
     ImageValidationError,
@@ -29,6 +32,7 @@ from derpy.core.exceptions import (
     ImagePullError,
     PlatformError,
     UnsupportedPlatformError,
+    PlatformNotSupportedError,
     ValidationError,
     InvalidTagError,
     InvalidPathError,
@@ -335,6 +339,64 @@ class TestValidationErrors:
         assert "Must be json or table" in str(error)
 
 
+class TestBuildIsolationErrors:
+    """Tests for build isolation errors."""
+    
+    def test_base_image_error(self):
+        """Test BaseImageError."""
+        error = BaseImageError("ubuntu:22.04", "Image not found")
+        assert isinstance(error, BuildError)
+        assert "ubuntu:22.04" in str(error)
+        assert "Image not found" in str(error)
+        assert error.remediation is not None
+    
+    def test_base_image_error_with_cause(self):
+        """Test BaseImageError with cause."""
+        cause = ConnectionError("Network error")
+        error = BaseImageError("nginx:alpine", "Download failed", cause=cause)
+        assert "nginx:alpine" in str(error)
+        assert "Download failed" in str(error)
+        assert "ConnectionError" in str(error)
+    
+    def test_isolation_error(self):
+        """Test IsolationError."""
+        error = IsolationError("Chroot failed")
+        assert isinstance(error, BuildError)
+        assert "Chroot failed" in str(error)
+        assert "Linux" in str(error)
+        assert error.remediation is not None
+    
+    def test_isolation_error_with_cause(self):
+        """Test IsolationError with cause."""
+        cause = PermissionError("Permission denied")
+        error = IsolationError("Cannot setup chroot", cause=cause)
+        assert "Cannot setup chroot" in str(error)
+        assert "PermissionError" in str(error)
+    
+    def test_filesystem_diff_error(self):
+        """Test FilesystemDiffError."""
+        error = FilesystemDiffError("Failed to capture diff")
+        assert isinstance(error, BuildError)
+        assert "Failed to capture diff" in str(error)
+        assert error.remediation is not None
+    
+    def test_filesystem_diff_error_with_cause(self):
+        """Test FilesystemDiffError with cause."""
+        cause = OSError("Disk error")
+        error = FilesystemDiffError("Cannot read filesystem", cause=cause)
+        assert "Cannot read filesystem" in str(error)
+        assert "OSError" in str(error)
+    
+    def test_platform_not_supported_error(self):
+        """Test PlatformNotSupportedError."""
+        error = PlatformNotSupportedError("chroot", "Linux", "Windows")
+        assert isinstance(error, PlatformError)
+        assert "chroot" in str(error)
+        assert "Linux" in str(error)
+        assert "Windows" in str(error)
+        assert error.remediation is not None
+
+
 class TestExceptionHierarchy:
     """Tests for exception hierarchy."""
     
@@ -357,9 +419,13 @@ class TestExceptionHierarchy:
         test_cases = [
             (ConfigFileNotFoundError, ConfigError),
             (DockerfileNotFoundError, BuildError),
+            (BaseImageError, BuildError),
+            (IsolationError, BuildError),
+            (FilesystemDiffError, BuildError),
             (ImageNotFoundError, StorageError),
             (RegistryConnectionError, RegistryError),
             (UnsupportedPlatformError, PlatformError),
+            (PlatformNotSupportedError, PlatformError),
             (InvalidTagError, ValidationError)
         ]
         

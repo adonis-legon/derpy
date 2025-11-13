@@ -473,6 +473,185 @@ class RegistryClient:
         except Exception as e:
             raise RegistryError(f"Failed to push image: {e}")
     
+    def download_manifest(
+        self,
+        repository: str,
+        reference: str
+    ) -> tuple[bytes, str]:
+        """Download image manifest from registry.
+        
+        Fetches the manifest for a specific image tag or digest. Supports both
+        Docker v2 and OCI manifest formats.
+        
+        Args:
+            repository: Repository name (e.g., "library/ubuntu")
+            reference: Tag or digest (e.g., "22.04" or "sha256:abc...")
+            
+        Returns:
+            Tuple of (manifest_bytes, media_type)
+            
+        Raises:
+            RegistryError: If download fails
+        """
+        try:
+            url = self._get_manifest_url(repository, reference)
+            
+            # Accept both Docker v2 and OCI manifest formats
+            headers = {
+                'Accept': ', '.join([
+                    'application/vnd.oci.image.manifest.v1+json',
+                    'application/vnd.docker.distribution.manifest.v2+json',
+                    'application/vnd.docker.distribution.manifest.list.v2+json'
+                ])
+            }
+            
+            response = self.session.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 404:
+                raise RegistryError(
+                    f"Manifest not found: {repository}:{reference}"
+                )
+            
+            if response.status_code != 200:
+                raise RegistryError(
+                    f"Failed to download manifest: {response.status_code} {response.text}"
+                )
+            
+            # Get media type from response
+            media_type = response.headers.get('Content-Type', 'application/vnd.oci.image.manifest.v1+json')
+            
+            return response.content, media_type
+            
+        except RegistryError:
+            raise
+        except requests.exceptions.Timeout:
+            raise RegistryError("Manifest download timeout")
+        except requests.exceptions.RequestException as e:
+            raise RegistryError(f"Failed to download manifest: {e}")
+    
+    def download_blob(
+        self,
+        repository: str,
+        digest: str,
+        progress_callback: Optional[callable] = None
+    ) -> bytes:
+        """Download a blob (layer or config) from registry.
+        
+        Downloads a content-addressable blob identified by its digest.
+        
+        Args:
+            repository: Repository name
+            digest: Blob digest (e.g., "sha256:abc...")
+            progress_callback: Optional callback for progress tracking (bytes_downloaded, total_bytes)
+            
+        Returns:
+            Blob content as bytes
+            
+        Raises:
+            RegistryError: If download fails
+        """
+        try:
+            url = self._get_blob_url(repository, digest)
+            
+            response = self.session.get(url, stream=True, timeout=30)
+            
+            if response.status_code == 404:
+                raise RegistryError(
+                    f"Blob not found: {digest}"
+                )
+            
+            if response.status_code != 200:
+                raise RegistryError(
+                    f"Failed to download blob: {response.status_code} {response.text}"
+                )
+            
+            # Get total size from headers
+            total_size = int(response.headers.get('Content-Length', 0))
+            
+            # Download blob in chunks
+            blob_data = bytearray()
+            downloaded = 0
+            
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    blob_data.extend(chunk)
+                    downloaded += len(chunk)
+                    
+                    if progress_callback and total_size > 0:
+                        progress_callback(downloaded, total_size)
+            
+            # Final progress update
+            if progress_callback and total_size > 0:
+                progress_callback(downloaded, total_size)
+            
+            return bytes(blob_data)
+            
+        except RegistryError:
+            raise
+        except requests.exceptions.Timeout:
+            raise RegistryError("Blob download timeout")
+        except requests.exceptions.RequestException as e:
+            raise RegistryError(f"Failed to download blob: {e}")
+    
+    def pull_image(
+        self,
+        repository: str,
+        tag: str,
+        progress_callback: Optional[callable] = None
+    ) -> tuple[bytes, bytes, list[tuple[str, bytes]]]:
+        """Download complete image (manifest + config + all layers).
+        
+        Downloads all components of an image from the registry. This is the
+        high-level method for pulling images.
+        
+        Args:
+            repository: Repository name (e.g., "library/ubuntu")
+            tag: Image tag (e.g., "22.04")
+            progress_callback: Optional callback for overall progress
+            
+        Returns:
+            Tuple of (manifest_bytes, config_bytes, [(layer_digest, layer_bytes), ...])
+            
+        Raises:
+            RegistryError: If pull fails
+        """
+        try:
+            # Download manifest
+            manifest_bytes, media_type = self.download_manifest(repository, tag)
+            
+            # Parse manifest
+            from derpy.oci.models import Manifest
+            import json
+            manifest_dict = json.loads(manifest_bytes.decode('utf-8'))
+            manifest = Manifest.from_dict(manifest_dict)
+            
+            # Download config blob
+            if not manifest.config:
+                raise RegistryError("Manifest does not contain config descriptor")
+            
+            config_bytes = self.download_blob(
+                repository,
+                manifest.config.digest,
+                progress_callback
+            )
+            
+            # Download all layer blobs
+            layers_data = []
+            for i, layer_desc in enumerate(manifest.layers):
+                layer_bytes = self.download_blob(
+                    repository,
+                    layer_desc.digest,
+                    progress_callback
+                )
+                layers_data.append((layer_desc.digest, layer_bytes))
+            
+            return manifest_bytes, config_bytes, layers_data
+            
+        except RegistryError:
+            raise
+        except Exception as e:
+            raise RegistryError(f"Failed to pull image: {e}")
+    
     def close(self) -> None:
         """Close the registry client session."""
         self.session.close()

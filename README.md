@@ -8,6 +8,8 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 
 - **Dockerfile Support**: Parse and build from familiar Dockerfile syntax
 - **OCI Compliance**: Generate fully compliant OCI container images
+- **Build Isolation**: Execute RUN commands in isolated chroot environments using base image filesystems (Linux only)
+- **Base Image Support**: Automatically pull and cache base images from OCI registries
 - **Local Repository**: Manage images in a local repository
 - **Registry Integration**: Push images to OCI-compliant registries
 - **Cross-Platform**: Works on Windows, Linux, and macOS
@@ -58,6 +60,28 @@ Example:
 derpy build . -f Dockerfile -t myapp:v1.0
 ```
 
+#### Build Isolation (Linux Only)
+
+On Linux systems, Derpy automatically enables build isolation, which:
+
+- Downloads and caches base images from OCI registries
+- Extracts base image layers into a temporary filesystem
+- Executes RUN commands in a chrooted environment using the base image's tools
+- Captures filesystem changes as proper OCI layers
+- Combines base and new layers into the final image
+
+This allows you to build real-world images that depend on distribution-specific package managers:
+
+```bash
+# Build Ubuntu image with apt-get
+derpy build . -f Dockerfile -t ubuntu-app:latest
+
+# Build Alpine image with apk
+derpy build . -f Dockerfile -t alpine-app:latest
+```
+
+On macOS and Windows, isolation is automatically disabled and builds use the v0.1.0 behavior (commands execute on the host system).
+
 ### Listing Images
 
 View all locally stored images:
@@ -102,6 +126,27 @@ derpy config set images-path /custom/path/to/images
 
 Configuration is stored in `~/.derpy/config.yaml`
 
+#### Build Isolation Configuration
+
+Configure build isolation behavior (Linux only):
+
+```bash
+# Disable isolation (use v0.1.0 behavior)
+derpy config set enable-isolation false
+
+# Set base image cache directory
+derpy config set base-image-cache-dir /custom/cache/path
+
+# Set chroot command timeout (seconds)
+derpy config set chroot-timeout 600
+```
+
+Configuration options:
+
+- `enable-isolation`: Enable/disable build isolation (default: true on Linux, false elsewhere)
+- `base-image-cache-dir`: Directory for caching downloaded base images (default: ~/.derpy/cache/base-images)
+- `chroot-timeout`: Maximum time in seconds for RUN commands in chroot (default: 300)
+
 ### Getting Help
 
 Get help for any command:
@@ -116,6 +161,9 @@ derpy push --help
 
 - Python 3.8 or higher
 - No Docker, Podman, or containerd installation required
+- **For build isolation with base images**: Linux environment (native or VM) with root privileges or CAP_SYS_CHROOT capability
+  - On macOS/Windows: Isolation features are disabled; builds fall back to v0.1.0 behavior
+  - On Linux: Full isolation support with chroot-based execution
 
 ## Development
 
@@ -195,9 +243,65 @@ RUN echo "Hello from Derpy!" > /usr/share/nginx/html/index.html
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
+### Ubuntu with Package Installation
+
+```dockerfile
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y curl wget
+RUN curl --version
+CMD ["/bin/bash"]
+```
+
+### Alpine with Development Tools
+
+```dockerfile
+FROM alpine:latest
+RUN apk add --no-cache git python3 py3-pip
+RUN python3 --version
+CMD ["/bin/sh"]
+```
+
 See the `examples/` directory for more sample Dockerfiles.
 
 ## Troubleshooting
+
+### Build Isolation Issues
+
+#### "Platform not supported for isolation" Error
+
+**Problem**: Attempting to use build isolation on macOS or Windows.
+
+**Solution**: Build isolation requires Linux. On other platforms, Derpy automatically falls back to v0.1.0 behavior. To build images with base image dependencies, use:
+
+- A Linux VM (VirtualBox, VMware, Parallels)
+- Docker Desktop with Linux containers
+- WSL2 on Windows
+- A cloud Linux instance
+
+#### "Insufficient permissions for chroot" Error
+
+**Problem**: Running on Linux but without root privileges or CAP_SYS_CHROOT capability.
+
+**Solution**: Run derpy with sudo or grant the capability:
+
+```bash
+# Option 1: Run with sudo
+sudo derpy build . -f Dockerfile -t myapp:latest
+
+# Option 2: Grant capability (one-time setup)
+sudo setcap cap_sys_chroot+ep $(which python3)
+```
+
+#### Base Image Download Fails
+
+**Problem**: Cannot download base image from registry.
+
+**Solution**:
+
+1. Check network connectivity
+2. Verify the image reference is correct (e.g., "ubuntu:22.04")
+3. For private registries, configure authentication in `~/.derpy/config.yaml`
+4. Check if the registry is accessible: `curl -I https://registry-1.docker.io/v2/`
 
 ### Build Fails with "Command not found"
 
@@ -265,7 +369,15 @@ derpy config set images-path ~/custom/derpy/images
 
 ### Q: Can I run containers built with Derpy?
 
-**A**: Version 0.1.0 focuses on building and distributing images. Container execution will be added in future releases. However, images built with Derpy are OCI-compliant and can be run with Docker, Podman, or other OCI-compatible runtimes.
+**A**: Derpy focuses on building and distributing images. Container execution will be added in future releases. However, images built with Derpy are OCI-compliant and can be run with Docker, Podman, or other OCI-compatible runtimes.
+
+### Q: Do I need Linux to use Derpy?
+
+**A**: Derpy works on Windows, Linux, and macOS. However, build isolation with base image support requires Linux. On macOS and Windows, Derpy automatically disables isolation and uses v0.1.0 behavior.
+
+### Q: How does build isolation work?
+
+**A**: On Linux, Derpy downloads base images from registries, extracts their layers into a temporary filesystem, and uses chroot to execute RUN commands in that isolated environment. This allows commands to access tools and dependencies from the base image rather than the host system.
 
 ### Q: Are Derpy images compatible with Docker?
 

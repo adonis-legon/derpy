@@ -65,6 +65,7 @@ Derpy is designed to be an **independent container tool** that:
 2. **Minimizes external dependencies**: Uses Python standard library wherever possible
 3. **Maintains OCI compliance**: Ensures interoperability with existing container ecosystems
 4. **Stays cross-platform**: Works consistently on Windows, Linux, and macOS
+5. **Provides build isolation on Linux**: Uses chroot to execute RUN commands in base image filesystems
 
 ## Development Workflow
 
@@ -146,6 +147,28 @@ pytest tests/test_config.py
 
 # Run specific test
 pytest tests/test_config.py::test_config_manager_load
+
+# Run unit tests only
+pytest -m unit
+
+# Run integration tests only (may require Linux for isolation tests)
+pytest -m integration
+```
+
+### Testing Build Isolation
+
+Build isolation tests require a Linux environment:
+
+- **On Linux**: All tests should pass
+- **On macOS/Windows**: Isolation tests will be skipped automatically
+
+To test build isolation features:
+
+```bash
+# Run isolation-specific tests (Linux only)
+pytest tests/test_build_isolation_integration.py
+pytest tests/test_isolation_executor.py
+pytest tests/test_base_image_manager.py
 ```
 
 ### Writing Tests

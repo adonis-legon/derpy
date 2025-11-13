@@ -36,6 +36,9 @@ class BuildSettings:
     max_layers: int = 127
     compression: str = "gzip"
     parallel_builds: bool = False
+    enable_isolation: bool = True
+    base_image_cache_dir: str = "~/.derpy/cache/base-images"
+    chroot_timeout: int = 300
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for YAML serialization."""
@@ -250,6 +253,15 @@ class ConfigManager:
         
         if config.build_settings.compression not in ["gzip", "none"]:
             raise ConfigError("compression must be 'gzip' or 'none'")
+        
+        if not isinstance(config.build_settings.enable_isolation, bool):
+            raise ConfigError("enable_isolation must be a boolean")
+        
+        if not isinstance(config.build_settings.base_image_cache_dir, str):
+            raise ConfigError("base_image_cache_dir must be a string")
+        
+        if config.build_settings.chroot_timeout < 1:
+            raise ConfigError("chroot_timeout must be at least 1 second")
         
         # Validate registry configs
         for name, reg_config in config.registry_configs.items():

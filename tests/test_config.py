@@ -86,6 +86,9 @@ class TestBuildSettings:
         assert settings.max_layers == 127
         assert settings.compression == "gzip"
         assert settings.parallel_builds is False
+        assert settings.enable_isolation is True
+        assert settings.base_image_cache_dir == "~/.derpy/cache/base-images"
+        assert settings.chroot_timeout == 300
     
     def test_build_settings_custom(self):
         """Test creating custom build settings."""
@@ -97,6 +100,17 @@ class TestBuildSettings:
         assert settings.default_platform == "linux/arm64"
         assert settings.max_layers == 100
         assert settings.compression == "none"
+    
+    def test_build_settings_isolation_options(self):
+        """Test build settings with isolation options."""
+        settings = BuildSettings(
+            enable_isolation=False,
+            base_image_cache_dir="/custom/cache",
+            chroot_timeout=600
+        )
+        assert settings.enable_isolation is False
+        assert settings.base_image_cache_dir == "/custom/cache"
+        assert settings.chroot_timeout == 600
 
 
 class TestConfigSerialization:
@@ -124,6 +138,25 @@ registry_configs: {}
         # Compare resolved paths since normalize_path resolves symlinks
         assert config.images_path.resolve() == Path("/tmp/test_images").resolve()
         assert config.build_settings.max_layers == 127
+    
+    def test_deserialize_config_with_isolation_settings(self):
+        """Test deserializing config with isolation settings."""
+        yaml_str = """
+images_path: /tmp/test_images
+build_settings:
+  default_platform: linux/amd64
+  max_layers: 127
+  compression: gzip
+  parallel_builds: false
+  enable_isolation: false
+  base_image_cache_dir: /custom/cache
+  chroot_timeout: 600
+registry_configs: {}
+"""
+        config = deserialize_config(yaml_str)
+        assert config.build_settings.enable_isolation is False
+        assert config.build_settings.base_image_cache_dir == "/custom/cache"
+        assert config.build_settings.chroot_timeout == 600
     
     def test_serialize_deserialize_roundtrip(self):
         """Test config serialization roundtrip."""
@@ -226,6 +259,63 @@ class TestConfigManager:
             config = manager.get_config()
             assert config.build_settings.max_layers == 100
             assert config.build_settings.compression == "none"
+    
+    def test_update_isolation_settings(self):
+        """Test updating isolation settings."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            manager = ConfigManager(config_path)
+            
+            manager.update_build_settings(
+                enable_isolation=False,
+                base_image_cache_dir="/custom/cache",
+                chroot_timeout=600
+            )
+            
+            config = manager.get_config()
+            assert config.build_settings.enable_isolation is False
+            assert config.build_settings.base_image_cache_dir == "/custom/cache"
+            assert config.build_settings.chroot_timeout == 600
+
+
+class TestConfigValidation:
+    """Tests for config validation."""
+    
+    def test_validate_chroot_timeout_minimum(self):
+        """Test validation of chroot_timeout minimum value."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            manager = ConfigManager(config_path)
+            
+            config = Config.default()
+            config.build_settings.chroot_timeout = 0
+            
+            with pytest.raises(ConfigError, match="chroot_timeout must be at least 1 second"):
+                manager.save_config(config)
+    
+    def test_validate_enable_isolation_type(self):
+        """Test validation of enable_isolation type."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            manager = ConfigManager(config_path)
+            
+            config = Config.default()
+            config.build_settings.enable_isolation = "true"  # Wrong type
+            
+            with pytest.raises(ConfigError, match="enable_isolation must be a boolean"):
+                manager.save_config(config)
+    
+    def test_validate_base_image_cache_dir_type(self):
+        """Test validation of base_image_cache_dir type."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            manager = ConfigManager(config_path)
+            
+            config = Config.default()
+            config.build_settings.base_image_cache_dir = 123  # Wrong type
+            
+            with pytest.raises(ConfigError, match="base_image_cache_dir must be a string"):
+                manager.save_config(config)
 
 
 if __name__ == "__main__":

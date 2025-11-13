@@ -413,3 +413,72 @@ class InvalidArgumentError(ValidationError):
             message=message,
             remediation="Check the command help for valid argument values"
         )
+
+
+# Build Isolation Errors
+
+class BaseImageError(BuildError):
+    """Base image retrieval or extraction failed.
+    
+    Raised when there are issues downloading or extracting base images.
+    """
+    
+    def __init__(self, image_ref: str, message: str, cause: Optional[Exception] = None):
+        super().__init__(
+            message=f"Base image error for '{image_ref}': {message}",
+            remediation=(
+                "Ensure the image reference is correct and the registry is accessible. "
+                "Check network connectivity and authentication credentials."
+            ),
+            cause=cause
+        )
+
+
+class IsolationError(BuildError):
+    """Chroot isolation setup or execution failed.
+    
+    Raised when there are issues with chroot environment setup or command execution.
+    """
+    
+    def __init__(self, message: str, cause: Optional[Exception] = None):
+        super().__init__(
+            message=f"Isolation error: {message}",
+            remediation=(
+                "Ensure you are running on Linux with appropriate permissions. "
+                "You may need to run with sudo or have CAP_SYS_CHROOT capability."
+            ),
+            cause=cause
+        )
+
+
+class FilesystemDiffError(BuildError):
+    """Filesystem diff capture failed.
+    
+    Raised when there are issues capturing filesystem changes between snapshots.
+    """
+    
+    def __init__(self, message: str, cause: Optional[Exception] = None):
+        super().__init__(
+            message=f"Filesystem diff error: {message}",
+            remediation="Check disk space and file permissions in the build directory",
+            cause=cause
+        )
+
+
+class PlatformNotSupportedError(PlatformError):
+    """Operation not supported on current platform.
+    
+    Raised when attempting to use features that require specific platform support.
+    """
+    
+    def __init__(self, operation: str, required_platform: str, current_platform: str):
+        super().__init__(
+            message=(
+                f"Operation '{operation}' requires {required_platform} "
+                f"but running on {current_platform}"
+            ),
+            remediation=(
+                f"This feature requires {required_platform}. "
+                "Consider using a Linux VM or container to run this operation."
+            )
+        )

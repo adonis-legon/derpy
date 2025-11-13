@@ -2,6 +2,12 @@
 
 This directory contains example Dockerfiles demonstrating various use cases with Derpy.
 
+## Build Isolation
+
+On Linux systems, Derpy automatically enables build isolation, which allows you to build real-world images that depend on base image filesystems and distribution-specific package managers. The examples below demonstrate this capability.
+
+On macOS and Windows, build isolation is disabled and examples may have limited functionality. Consider using a Linux VM or WSL2 for full feature support.
+
 ## Available Examples
 
 ### 1. Minimal Example (`minimal/`)
@@ -28,6 +34,18 @@ Ubuntu-based image with common development tools installed.
 
 **Build**: `derpy build examples/ubuntu-tools -f examples/ubuntu-tools/Dockerfile -t ubuntu-dev:latest`
 
+### 5. Ubuntu with curl (`ubuntu-curl/`) - Linux Only
+
+Demonstrates real-world package installation with apt-get. Requires build isolation (Linux only).
+
+**Build**: `derpy build examples/ubuntu-curl -f examples/ubuntu-curl/Dockerfile -t ubuntu-curl:latest`
+
+### 6. Alpine with Python (`alpine-python/`) - Linux Only
+
+Demonstrates lightweight Alpine image with Python installation using apk. Requires build isolation (Linux only).
+
+**Build**: `derpy build examples/alpine-python -f examples/alpine-python/Dockerfile -t alpine-python:latest`
+
 ## General Usage Pattern
 
 All examples follow this pattern:
@@ -46,13 +64,52 @@ derpy ls
 derpy push [image-name]:[tag]
 ```
 
-## Supported Instructions (v0.1.0)
+## Supported Instructions
 
-These examples only use instructions supported in Derpy v0.1.0:
+These examples only use instructions currently supported by Derpy:
 
-- `FROM` - Specify base image
-- `RUN` - Execute commands during build
+- `FROM` - Specify base image (with automatic download and caching)
+- `RUN` - Execute commands during build (in isolated chroot on Linux)
 - `CMD` - Set default command
+
+## Real-World Image Building (Linux Only)
+
+With build isolation enabled on Linux, you can build images that use distribution-specific package managers:
+
+### Ubuntu with apt-get
+
+```dockerfile
+FROM ubuntu:22.04
+RUN apt-get update && apt-get install -y curl wget git
+RUN curl --version
+CMD ["/bin/bash"]
+```
+
+### Alpine with apk
+
+```dockerfile
+FROM alpine:latest
+RUN apk add --no-cache python3 py3-pip nodejs npm
+RUN python3 --version && node --version
+CMD ["/bin/sh"]
+```
+
+### Debian with apt
+
+```dockerfile
+FROM debian:bullseye
+RUN apt-get update && apt-get install -y nginx
+RUN nginx -v
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+These examples work because Derpy:
+
+1. Downloads the base image from the registry
+2. Extracts the base image layers into a temporary filesystem
+3. Executes RUN commands in a chrooted environment with access to the base image's tools
+4. Captures filesystem changes as new layers
+5. Combines base and new layers into the final image
 
 ## Tips
 

@@ -234,9 +234,17 @@ def build(ctx, context: Path, dockerfile: Path, tag: str):
             dockerfile_path=dockerfile_path
         )
         
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
         # Build image
         click.echo("Parsing Dockerfile...")
-        build_engine = BuildEngine()
+        build_engine = BuildEngine(
+            enable_isolation=config.build_settings.enable_isolation,
+            base_image_cache_dir=Path(config.build_settings.base_image_cache_dir).expanduser(),
+            chroot_timeout=config.build_settings.chroot_timeout
+        )
         
         click.echo("Executing build instructions...")
         image = build_engine.build_image(build_context, tag)
