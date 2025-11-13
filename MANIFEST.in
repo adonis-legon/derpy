@@ -1,0 +1,35 @@
+# Include documentation and license files
+include README.md
+include LICENSE
+include CONTRIBUTING.md
+
+# Include configuration files
+include pyproject.toml
+
+# Exclude development and build artifacts
+exclude .gitignore
+exclude .coverage
+exclude coverage.xml
+
+# Exclude test files from distribution
+recursive-exclude tests *
+recursive-exclude htmlcov *
+recursive-exclude .pytest_cache *
+
+# Exclude virtual environments
+recursive-exclude venv *
+recursive-exclude .venv *
+
+# Exclude build artifacts
+recursive-exclude derpy.egg-info *
+recursive-exclude build *
+recursive-exclude dist *
+
+# Exclude git directory
+recursive-exclude .git *
+
+# Exclude IDE and editor files
+recursive-exclude .vscode *
+recursive-exclude .idea *
+recursive-exclude __pycache__ *
+recursive-exclude *.pyc

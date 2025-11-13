@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Test Coverage Monitor",
+  "description": "Monitors Python source files for new or modified classes and functions, then checks test coverage and proposes new test cases to maintain coverage above 70%",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "derpy/**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the modified Python files in the derpy/ directory. Identify any new classes or functions, or modifications to existing ones. Then:\n\n1. Check the current test coverage for the affected modules by examining the coverage reports (.coverage, coverage.xml, htmlcov/)\n2. Review existing tests in the tests/ directory that cover these modules\n3. Identify gaps in test coverage for the new or modified code\n4. Propose specific new test cases (both unit tests and integration tests with mocks where appropriate) to ensure coverage stays above 70%\n5. For each proposed test:\n   - Specify the test file name (following the test_*.py convention)\n   - Provide the test function name and a brief description\n   - Indicate whether it should be a unit test or integration test\n   - List any mocks that would be needed\n   - Explain what aspect of coverage it addresses\n\nFormat your response as actionable test proposals that can be implemented to maintain the 70% coverage threshold."
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Derpy is a zero-dependency container tool designed to provide essential container functionality without relying on existing container runtimes like Docker, Podman, or containerd. The tool will be developed as a cross-platform Python CLI application that can build, manage, and distribute OCI-compliant container images. Version v0.1.0 focuses on core functionality including Dockerfile parsing, image building, local repository management, and registry integration.
+Derpy is another container tool that does not depend on any existing container runtime like Docker, Podman, or containerd. The tool is designed to provide essential container functionality independently, developed as a cross-platform Python CLI application that can build, manage, and distribute OCI-compliant container images. Version v0.1.0 focuses on core functionality including Dockerfile parsing, image building, local repository management, and registry integration.
 
 ## Requirements
 
@@ -26,8 +26,7 @@ Derpy is a zero-dependency container tool designed to provide essential containe
 
 1. WHEN the user runs "derpy --version" THEN derpy SHALL display the current version number
 2. WHEN the user runs "derpy --version" THEN derpy SHALL display the author information
-3. WHEN the user runs "derpy --version" THEN derpy SHALL display the release date
-4. WHEN the user runs "derpy version" THEN derpy SHALL display the same version information as "--version"
+3. WHEN the user runs "derpy version" THEN derpy SHALL display the same version information as "--version"
 
 ### Requirement 3: Help System
 
