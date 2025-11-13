@@ -4,7 +4,19 @@ This directory contains example Dockerfiles demonstrating various use cases with
 
 ## Build Isolation
 
-On Linux systems, Derpy automatically enables build isolation, which allows you to build real-world images that depend on base image filesystems and distribution-specific package managers. The examples below demonstrate this capability.
+On Linux systems, Derpy automatically enables build isolation, which allows you to build real-world images that depend on base image filesystems and distribution-specific package managers.
+
+**Important**: Build isolation requires root privileges. Use `sudo` when building examples that depend on base images:
+
+```bash
+# Examples requiring sudo (base image filesystem access)
+sudo derpy build examples/nginx-web -f examples/nginx-web/Dockerfile -t nginx-web:latest
+sudo derpy build examples/ubuntu-curl -f examples/ubuntu-curl/Dockerfile -t ubuntu-curl:latest
+sudo derpy build examples/alpine-python -f examples/alpine-python/Dockerfile -t alpine-python:latest
+
+# Simple examples that work without sudo
+derpy build examples/minimal -f examples/minimal/Dockerfile -t minimal:latest
+```
 
 On macOS and Windows, build isolation is disabled and examples may have limited functionality. Consider using a Linux VM or WSL2 for full feature support.
 
@@ -12,39 +24,39 @@ On macOS and Windows, build isolation is disabled and examples may have limited 
 
 ### 1. Minimal Example (`minimal/`)
 
-The simplest possible Dockerfile using Alpine Linux. Perfect for testing and learning.
+The simplest possible Dockerfile using Alpine Linux. Perfect for testing and learning. Works without sudo.
 
 **Build**: `derpy build examples/minimal -f examples/minimal/Dockerfile -t minimal:latest`
 
 ### 2. Python Flask Application (`python-app/`)
 
-A Python web application using Flask framework.
+A Python web application using Flask framework. Requires sudo for base image access.
 
-**Build**: `derpy build examples/python-app -f examples/python-app/Dockerfile -t flask-app:latest`
+**Build**: `sudo derpy build examples/python-app -f examples/python-app/Dockerfile -t flask-app:latest`
 
 ### 3. Nginx Web Server (`nginx-web/`)
 
-A lightweight web server with custom HTML content.
+A lightweight web server with custom HTML content. Requires sudo for base image filesystem access.
 
-**Build**: `derpy build examples/nginx-web -f examples/nginx-web/Dockerfile -t nginx-hello:latest`
+**Build**: `sudo derpy build examples/nginx-web -f examples/nginx-web/Dockerfile -t nginx-hello:latest`
 
 ### 4. Ubuntu Development Tools (`ubuntu-tools/`)
 
-Ubuntu-based image with common development tools installed.
+Ubuntu-based image with common development tools installed. Requires sudo for apt-get.
 
-**Build**: `derpy build examples/ubuntu-tools -f examples/ubuntu-tools/Dockerfile -t ubuntu-dev:latest`
+**Build**: `sudo derpy build examples/ubuntu-tools -f examples/ubuntu-tools/Dockerfile -t ubuntu-dev:latest`
 
 ### 5. Ubuntu with curl (`ubuntu-curl/`) - Linux Only
 
-Demonstrates real-world package installation with apt-get. Requires build isolation (Linux only).
+Demonstrates real-world package installation with apt-get. Requires build isolation (Linux with sudo).
 
-**Build**: `derpy build examples/ubuntu-curl -f examples/ubuntu-curl/Dockerfile -t ubuntu-curl:latest`
+**Build**: `sudo derpy build examples/ubuntu-curl -f examples/ubuntu-curl/Dockerfile -t ubuntu-curl:latest`
 
 ### 6. Alpine with Python (`alpine-python/`) - Linux Only
 
-Demonstrates lightweight Alpine image with Python installation using apk. Requires build isolation (Linux only).
+Demonstrates lightweight Alpine image with Python installation using apk. Requires build isolation (Linux with sudo).
 
-**Build**: `derpy build examples/alpine-python -f examples/alpine-python/Dockerfile -t alpine-python:latest`
+**Build**: `sudo derpy build examples/alpine-python -f examples/alpine-python/Dockerfile -t alpine-python:latest`
 
 ## General Usage Pattern
 

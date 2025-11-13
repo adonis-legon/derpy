@@ -70,15 +70,20 @@ On Linux systems, Derpy automatically enables build isolation, which:
 - Captures filesystem changes as proper OCI layers
 - Combines base and new layers into the final image
 
-This allows you to build real-world images that depend on distribution-specific package managers:
+**Important**: Build isolation requires root privileges. Use `sudo` when building images that depend on base image filesystems:
 
 ```bash
-# Build Ubuntu image with apt-get
-derpy build . -f Dockerfile -t ubuntu-app:latest
+# Build Ubuntu image with apt-get (requires sudo)
+sudo derpy build . -f Dockerfile -t ubuntu-app:latest
 
-# Build Alpine image with apk
-derpy build . -f Dockerfile -t alpine-app:latest
+# Build Alpine image with apk (requires sudo)
+sudo derpy build . -f Dockerfile -t alpine-app:latest
+
+# Build nginx with custom content (requires sudo)
+sudo derpy build examples/nginx-web -f examples/nginx-web/Dockerfile -t nginx-web:latest
 ```
+
+**Without sudo**: Derpy detects insufficient permissions and automatically falls back to v0.1.0 behavior (commands execute on the host system). This works for simple commands but fails for operations requiring base image filesystems.
 
 On macOS and Windows, isolation is automatically disabled and builds use the v0.1.0 behavior (commands execute on the host system).
 
@@ -161,9 +166,15 @@ derpy push --help
 
 - Python 3.8 or higher
 - No Docker, Podman, or containerd installation required
-- **For build isolation with base images**: Linux environment (native or VM) with root privileges or CAP_SYS_CHROOT capability
-  - On macOS/Windows: Isolation features are disabled; builds fall back to v0.1.0 behavior
-  - On Linux: Full isolation support with chroot-based execution
+
+### For Build Isolation (Real-World Container Builds)
+
+Build isolation enables building images that depend on base image filesystems and package managers (apt, apk, yum, etc.):
+
+- **Linux**: Full support with root privileges (`sudo`) or CAP_SYS_CHROOT capability
+- **macOS/Windows**: Not supported; builds automatically fall back to v0.1.0 behavior
+
+Without isolation, only simple RUN commands that don't depend on base image filesystems will work (e.g., `echo`, basic shell commands).
 
 ## Development
 

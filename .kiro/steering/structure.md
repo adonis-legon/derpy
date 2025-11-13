@@ -13,7 +13,12 @@ derpy/
 ├── build/            # Build engine and layer creation
 │   ├── engine.py     # BuildEngine, BuildContext
 │   ├── layers.py     # LayerBuilder for filesystem layers
-│   └── pipeline.py   # InstructionPipeline for build execution
+│   ├── pipeline.py   # InstructionPipeline for build execution
+│   ├── isolation.py  # IsolationExecutor for chroot-based command execution
+│   ├── base_image.py # BaseImageManager for downloading and caching base images
+│   ├── diff.py       # LayerDiffManager for tracking filesystem changes
+│   ├── models.py     # Build-related data models (ImageReference, FileEntry, etc.)
+│   └── exceptions.py # Build-specific exceptions
 ├── dockerfile/       # Dockerfile parsing
 │   ├── parser.py     # DockerfileParser, Instruction models
 │   └── handlers.py   # Instruction handlers (FROM, RUN, CMD)

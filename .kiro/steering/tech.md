@@ -50,10 +50,22 @@ derpy --version
 derpy build . -f Dockerfile -t myapp:latest
 derpy ls
 derpy push myapp:latest
+
+# Build with isolation (Linux only, requires sudo)
+sudo derpy build . -f Dockerfile -t myapp:latest
 ```
 
 ## Configuration
 
 - User config: `~/.derpy/config.yaml`
 - Images stored: `~/.derpy/images/` (configurable)
+- Base image cache: `~/.derpy/cache/base-images/` (configurable)
 - Config managed via: `derpy config show/set` commands
+
+Build isolation settings:
+
+```bash
+derpy config set build_settings.enable_isolation true
+derpy config set build_settings.base_image_cache_dir /custom/cache/path
+derpy config set build_settings.chroot_timeout 600
+```
