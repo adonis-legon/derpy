@@ -121,7 +121,7 @@ derpy config show
 Set configuration values:
 
 ```bash
-derpy config set images-path /custom/path/to/images
+derpy config set images_path /custom/path/to/images
 ```
 
 Configuration is stored in `~/.derpy/config.yaml`
@@ -132,13 +132,13 @@ Configure build isolation behavior (Linux only):
 
 ```bash
 # Disable isolation (use v0.1.0 behavior)
-derpy config set enable-isolation false
+derpy config set build_settings.enable_isolation false
 
 # Set base image cache directory
-derpy config set base-image-cache-dir /custom/cache/path
+derpy config set build_settings.base_image_cache_dir /custom/cache/path
 
 # Set chroot command timeout (seconds)
-derpy config set chroot-timeout 600
+derpy config set build_settings.chroot_timeout 600
 ```
 
 Configuration options:
@@ -341,7 +341,7 @@ chmod 755 ~/.derpy
 ls -la ~/.derpy
 
 # Or specify a different path
-derpy config set images-path ~/custom/derpy/images
+derpy config set images_path ~/custom/derpy/images
 ```
 
 ### Registry Push Fails
@@ -388,7 +388,7 @@ derpy config set images-path ~/custom/derpy/images
 **A**: By default, images are stored in `~/.derpy/images/`. You can change this with:
 
 ```bash
-derpy config set images-path /your/custom/path
+derpy config set images_path /your/custom/path
 ```
 
 ### Q: What Python version is required?

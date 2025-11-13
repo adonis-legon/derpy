@@ -147,15 +147,15 @@ def config_set(ctx, key: str, value: str):
             setting_key = parts[1]
             
             # Convert value to appropriate type
-            if setting_key == 'max_layers':
+            if setting_key in ('max_layers', 'chroot_timeout'):
                 try:
                     typed_value = int(value)
                 except ValueError:
-                    click.echo(f"Error: max_layers must be an integer", err=True)
+                    click.echo(f"Error: {setting_key} must be an integer", err=True)
                     ctx.exit(1)
-            elif setting_key == 'parallel_builds':
+            elif setting_key in ('parallel_builds', 'enable_isolation'):
                 typed_value = value.lower() in ('true', 'yes', '1', 'on')
-            elif setting_key in ('default_platform', 'compression'):
+            elif setting_key in ('default_platform', 'compression', 'base_image_cache_dir'):
                 typed_value = value
             else:
                 click.echo(f"Error: Unknown build setting '{setting_key}'", err=True)

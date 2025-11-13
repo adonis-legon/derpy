@@ -47,7 +47,7 @@ Derpy is another container tool that does not depend on any existing container r
 
 1. WHEN derpy is first run THEN derpy SHALL create a default configuration with images stored in "~/.derpy/images"
 2. WHEN derpy is first run THEN derpy SHALL create a configuration file at "~/.derpy/config.yaml"
-3. WHEN the user runs "derpy config set images-path [path]" THEN derpy SHALL update the local images repository path
+3. WHEN the user runs "derpy config set images_path [path]" THEN derpy SHALL update the local images repository path
 4. WHEN the user runs "derpy config show" THEN derpy SHALL display the current configuration settings
 5. IF the configured images path does not exist THEN derpy SHALL create the directory structure automatically
 6. WHEN derpy reads the config file THEN derpy SHALL validate the YAML format and report any syntax errors
