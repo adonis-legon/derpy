@@ -18,8 +18,8 @@ class TestCLIMocked:
         result = runner.invoke(cli, ['version'])
         
         assert result.exit_code == 0
-        assert 'derpy' in result.output.lower()
         assert 'version' in result.output.lower()
+        assert 'author' in result.output.lower()
     
     @patch('derpy.cli.main.ConfigManager')
     def test_config_show_with_mock(self, mock_config_manager_class):

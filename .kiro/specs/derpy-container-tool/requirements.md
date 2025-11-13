@@ -26,8 +26,7 @@ Derpy is another container tool that does not depend on any existing container r
 
 1. WHEN the user runs "derpy --version" THEN derpy SHALL display the current version number
 2. WHEN the user runs "derpy --version" THEN derpy SHALL display the author information
-3. WHEN the user runs "derpy --version" THEN derpy SHALL display the release date
-4. WHEN the user runs "derpy version" THEN derpy SHALL display the same version information as "--version"
+3. WHEN the user runs "derpy version" THEN derpy SHALL display the same version information as "--version"
 
 ### Requirement 3: Help System
 

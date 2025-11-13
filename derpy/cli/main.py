@@ -28,7 +28,7 @@ class BannerGroup(click.Group):
 @click.version_option(
     version=__version__,
     prog_name="derpy",
-    message=f"%(prog)s version %(version)s\nAuthor: {__author__}\nRelease Date: 2024-01-15"
+    message=f"Version: %(version)s\nAuthor: {__author__}"
 )
 @click.pass_context
 def cli(ctx):
@@ -46,9 +46,8 @@ def cli(ctx):
 @cli.command()
 def version():
     """Display version information with author and date."""
-    click.echo(f"derpy version {__version__}")
+    click.echo(f"Version: {__version__}")
     click.echo(f"Author: {__author__}")
-    click.echo(f"Release Date: 2024-01-15")
 
 
 @cli.group()

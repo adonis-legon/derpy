@@ -52,7 +52,7 @@ class TestCLIBasics:
         result = runner.invoke(cli, ['version'])
         assert result.exit_code == 0
         assert 'version' in result.output.lower()
-        assert 'derpy' in result.output.lower()
+        assert 'author' in result.output.lower()
 
 
 class TestConfigCommands:
