@@ -1,5 +1,5 @@
 """
-Derpy - A zero-dependency container tool
+Derpy - A simple container tool, made with AI
 
 A Python CLI application that provides essential container functionality
 without relying on existing container runtimes like Docker, Podman, or containerd.

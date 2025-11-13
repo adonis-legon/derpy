@@ -2,9 +2,9 @@
 
 ## Overview
 
-Derpy is a zero-dependency container tool implemented as a Python CLI application that provides essential container functionality without relying on existing container runtimes. The architecture follows a modular design with clear separation of concerns between CLI interface, core container operations, OCI compliance, and registry interactions.
+Derpy is another container tool that does not depend on any existing container runtime like Docker, Podman, or containerd. Implemented as a Python CLI application, it provides essential container functionality independently. The architecture follows a modular design with clear separation of concerns between CLI interface, core container operations, OCI compliance, and registry interactions.
 
-The tool leverages Python's cross-platform capabilities and standard library to minimize external dependencies while maintaining full OCI compliance for interoperability with existing container ecosystems.
+The tool leverages Python's cross-platform capabilities to build and manage containers without requiring Docker or other container runtimes, while maintaining full OCI compliance for interoperability with existing container ecosystems.
 
 ## Architecture
 
