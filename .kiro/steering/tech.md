@@ -55,9 +55,34 @@ derpy push myapp:latest
 sudo derpy build . -f Dockerfile -t myapp:latest
 ```
 
+Authentication:
+
+```bash
+# Login to Docker Hub
+derpy login
+
+# Login to custom registry
+derpy login registry.example.com
+derpy login -u myuser -p mypass registry.example.com
+
+# Login with password from stdin
+echo "mypass" | derpy login --password-stdin registry.example.com
+
+# Logout from registry
+derpy logout
+derpy logout registry.example.com
+
+# Build with private base image (uses stored credentials)
+derpy build . -f Dockerfile -t myapp:latest
+
+# Push to authenticated registry (uses stored credentials)
+derpy push registry.example.com/myapp:latest
+```
+
 ## Configuration
 
 - User config: `~/.derpy/config.yaml`
+- Registry credentials: `~/.derpy/auth.json` (file permissions: 0600)
 - Images stored: `~/.derpy/images/` (configurable)
 - Base image cache: `~/.derpy/cache/base-images/` (configurable)
 - Config managed via: `derpy config show/set` commands

@@ -2,6 +2,44 @@
 
 This module defines all custom exceptions used throughout the derpy application,
 providing clear error messages and remediation suggestions.
+
+Exception Hierarchy:
+    DerpyError (base)
+    ├── ConfigError
+    │   ├── ConfigFileNotFoundError
+    │   ├── ConfigValidationError
+    │   └── ConfigParseError
+    ├── BuildError
+    │   ├── DockerfileNotFoundError
+    │   ├── DockerfileSyntaxError
+    │   ├── UnsupportedInstructionError
+    │   ├── BuildContextError
+    │   ├── CommandExecutionError
+    │   ├── LayerCreationError
+    │   ├── BaseImageError
+    │   ├── IsolationError
+    │   └── FilesystemDiffError
+    ├── StorageError
+    │   ├── ImageNotFoundError
+    │   ├── ImageValidationError
+    │   ├── RepositoryError
+    │   ├── BlobNotFoundError
+    │   └── DiskSpaceError
+    ├── RegistryError
+    │   ├── RegistryConnectionError
+    │   └── RegistryAuthenticationError
+    ├── AuthenticationError
+    │   ├── CredentialStorageError
+    │   ├── TokenAuthenticationError
+    │   └── InvalidCredentialsError
+    ├── PlatformError
+    │   ├── UnsupportedPlatformError
+    │   ├── PermissionError
+    │   └── PlatformNotSupportedError
+    └── ValidationError
+        ├── InvalidTagError
+        ├── InvalidPathError
+        └── InvalidArgumentError
 """
 
 from typing import Optional
@@ -291,6 +329,64 @@ class RegistryAuthenticationError(RegistryError):
                 "Use 'derpy config set registry_configs.<name>.username <username>' "
                 "to configure credentials."
             )
+        )
+
+
+# Authentication Errors
+
+class AuthenticationError(DerpyError):
+    """Base class for authentication errors.
+    
+    Raised when there are issues with registry authentication,
+    credential storage, or token-based authentication.
+    """
+    pass
+
+
+class CredentialStorageError(AuthenticationError):
+    """Error storing or retrieving credentials.
+    
+    Raised when there are issues reading or writing the auth file,
+    or when the auth file format is invalid.
+    """
+    
+    def __init__(self, message: str, cause: Optional[Exception] = None):
+        super().__init__(
+            message=f"Credential storage error: {message}",
+            remediation="Check file permissions for ~/.derpy/auth.json",
+            cause=cause
+        )
+
+
+class TokenAuthenticationError(AuthenticationError):
+    """Error during token authentication.
+    
+    Raised when there are issues requesting or using bearer tokens
+    for registry authentication (e.g., Docker Hub token auth).
+    """
+    
+    def __init__(self, message: str, realm: Optional[str] = None, cause: Optional[Exception] = None):
+        error_msg = f"Token authentication error: {message}"
+        if realm:
+            error_msg = f"Token authentication error for {realm}: {message}"
+        
+        super().__init__(
+            message=error_msg,
+            remediation="Check network connectivity and registry authentication service status",
+            cause=cause
+        )
+
+
+class InvalidCredentialsError(AuthenticationError):
+    """Invalid username or password.
+    
+    Raised when authentication fails due to incorrect credentials.
+    """
+    
+    def __init__(self, registry: str):
+        super().__init__(
+            message=f"Invalid credentials for registry: {registry}",
+            remediation=f"Check your username and password. Run 'derpy login {registry}' to update credentials."
         )
 
 

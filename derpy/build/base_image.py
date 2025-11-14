@@ -17,8 +17,9 @@ from derpy.oci.models import MEDIA_TYPE_IMAGE_CONFIG, MEDIA_TYPE_IMAGE_LAYER
 from derpy.registry.client import RegistryClient
 from derpy.storage.manager import ImageManager
 from derpy.core.config import RegistryConfig
-from derpy.core.exceptions import BaseImageError
+from derpy.core.exceptions import BaseImageError, RegistryAuthenticationError
 from derpy.core.logging import get_logger
+from derpy.core.auth import AuthManager
 
 
 class BaseImageManager:
@@ -31,18 +32,50 @@ class BaseImageManager:
     def __init__(
         self,
         storage_manager: ImageManager,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
+        auth_manager: Optional[AuthManager] = None
     ):
         """Initialize BaseImageManager.
         
         Args:
             storage_manager: ImageManager for local storage operations
             cache_dir: Directory for caching base images (default: ~/.derpy/cache/base-images)
+            auth_manager: AuthManager for registry credentials (default: creates new instance)
         """
         self.storage = storage_manager
         self.cache_dir = cache_dir or Path.home() / ".derpy" / "cache" / "base-images"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.logger = get_logger("base_image")
+        self.auth_manager = auth_manager or self._create_auth_manager()
+    
+    def _create_auth_manager(self) -> AuthManager:
+        """Create AuthManager instance with appropriate auth file path.
+        
+        Handles sudo builds by using the SUDO_USER's home directory if available.
+        
+        Returns:
+            AuthManager instance
+        """
+        import os
+        
+        # Check if running as root
+        if hasattr(os, 'geteuid') and os.geteuid() == 0:
+            # Running as root - check for SUDO_USER
+            sudo_user = os.environ.get('SUDO_USER')
+            if sudo_user:
+                # Use SUDO_USER's home directory
+                import pwd
+                try:
+                    user_info = pwd.getpwnam(sudo_user)
+                    user_home = Path(user_info.pw_dir)
+                    auth_file = user_home / ".derpy" / "auth.json"
+                    self.logger.info(f"Using auth file from SUDO_USER ({sudo_user}): {auth_file}")
+                    return AuthManager(auth_file=auth_file)
+                except KeyError:
+                    self.logger.warning(f"SUDO_USER '{sudo_user}' not found, using root's auth file")
+        
+        # Use default auth file (current user's home directory)
+        return AuthManager()
     
     def resolve_image_reference(self, image_ref: str) -> Tuple[str, str, str]:
         """Parse image reference into registry, repository, and tag.
@@ -140,22 +173,53 @@ class BaseImageManager:
             else:
                 api_url = registry_url
             
-            # Create registry config
-            registry_config = RegistryConfig(
-                url=api_url,
-                username=None,  # TODO: Support authentication from config
-                password=None,
-                insecure=False
-            )
+            # Check for stored credentials
+            credentials = self.auth_manager.get_credentials(registry_url)
+            
+            # Create registry config with credentials if available
+            if credentials:
+                self.logger.info(f"Using authenticated pull for {registry_url}")
+                registry_config = RegistryConfig(
+                    url=api_url,
+                    username=credentials.username,
+                    password=credentials.decode_password(),
+                    insecure=False
+                )
+            else:
+                self.logger.info(f"Using anonymous pull for {registry_url}")
+                registry_config = RegistryConfig(
+                    url=api_url,
+                    username=None,
+                    password=None,
+                    insecure=False
+                )
+            
+            # Determine if token auth should be enabled (for Docker Hub)
+            enable_token_auth = registry_url == "docker.io"
             
             # Create registry client and pull image
             try:
-                with RegistryClient(registry_config) as client:
+                with RegistryClient(registry_config, enable_token_auth=enable_token_auth) as client:
                     # Pull image components
                     manifest_bytes, config_bytes, layers_data = client.pull_image(
                         repository,
                         tag
                     )
+            except RegistryAuthenticationError as auth_error:
+                # Handle authentication errors specifically
+                raise BaseImageError(
+                    image_ref=image_ref,
+                    message=(
+                        f"Authentication failed for base image: {image_ref}\n"
+                        f"Registry: {registry_url}\n"
+                        f"\n"
+                        f"To authenticate with this registry, run:\n"
+                        f"  derpy login {registry_url}\n"
+                        f"\n"
+                        f"Error details: {auth_error.message}"
+                    ),
+                    cause=auth_error
+                )
             except Exception as pull_error:
                 # Provide clear error message for image not found
                 error_msg = str(pull_error)
@@ -172,12 +236,17 @@ class BaseImageManager:
                         cause=pull_error
                     )
                 elif "401" in error_msg or "403" in error_msg or "unauthorized" in error_msg.lower():
+                    # Authentication error not caught by RegistryAuthenticationError
                     raise BaseImageError(
                         image_ref=image_ref,
                         message=(
                             f"Authentication failed for base image: {image_ref}\n"
-                            f"Registry: {api_url}\n"
-                            "Please check your registry credentials."
+                            f"Registry: {registry_url}\n"
+                            f"\n"
+                            f"To authenticate with this registry, run:\n"
+                            f"  derpy login {registry_url}\n"
+                            f"\n"
+                            f"Error details: {error_msg}"
                         ),
                         cause=pull_error
                     )

@@ -3,16 +3,21 @@ Main CLI entry point for derpy container tool.
 """
 
 import click
+import getpass
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from derpy import __version__, __author__
 from derpy.core.config import ConfigManager, ConfigError, RegistryConfig
+from derpy.core.auth import AuthManager
+from derpy.core.exceptions import AuthenticationError, InvalidCredentialsError
 from derpy.cli.banner import get_banner
 from derpy.build import BuildEngine, BuildContext, BuildError
 from derpy.storage import ImageManager, StorageError
 from derpy.registry import RegistryClient, RegistryError
+from derpy.core.exceptions import RegistryAuthenticationError
 
 
 class BannerGroup(click.Group):
@@ -341,18 +346,178 @@ def list_images(ctx, format: str):
 
 
 @cli.command()
+@click.argument('registry', default='docker.io')
+@click.option(
+    '-u', '--username',
+    help='Username for registry authentication'
+)
+@click.option(
+    '-p', '--password',
+    help='Password for registry authentication'
+)
+@click.option(
+    '--password-stdin',
+    is_flag=True,
+    help='Read password from stdin'
+)
+@click.pass_context
+def login(
+    ctx,
+    registry: str,
+    username: Optional[str],
+    password: Optional[str],
+    password_stdin: bool
+):
+    """
+    Login to a container registry.
+    
+    REGISTRY is the registry URL (default: docker.io for Docker Hub).
+    
+    Credentials are stored securely in ~/.derpy/auth.json with file
+    permissions set to 0600 (owner read/write only).
+    
+    Examples:
+    
+      derpy login
+      
+      derpy login registry.example.com
+      
+      derpy login -u myuser -p mypass registry.example.com
+      
+      echo "mypass" | derpy login --password-stdin -u myuser registry.example.com
+    """
+    try:
+        # Validate that password-stdin and password are not both specified
+        if password_stdin and password:
+            click.echo(
+                "Error: Cannot use both --password and --password-stdin",
+                err=True
+            )
+            ctx.exit(1)
+        
+        # Prompt for username if not provided
+        if not username:
+            username = click.prompt("Username", type=str)
+        
+        # Validate username is not empty
+        if not username or not username.strip():
+            click.echo("Error: Username cannot be empty", err=True)
+            ctx.exit(1)
+        
+        username = username.strip()
+        
+        # Get password from stdin, option, or prompt
+        if password_stdin:
+            # Read password from stdin
+            password = sys.stdin.read().strip()
+            if not password:
+                click.echo("Error: No password provided on stdin", err=True)
+                ctx.exit(1)
+        elif password is not None:
+            # Password provided via option - validate it's not empty
+            if not password or not password.strip():
+                click.echo("Error: Password cannot be empty", err=True)
+                ctx.exit(1)
+            password = password.strip()
+        else:
+            # Prompt for password (hidden input)
+            password = getpass.getpass("Password: ")
+            # Validate password is not empty
+            if not password or not password.strip():
+                click.echo("Error: Password cannot be empty", err=True)
+                ctx.exit(1)
+            password = password.strip()
+        
+        # Create AuthManager instance
+        auth_manager = AuthManager()
+        
+        # Normalize registry URL for display
+        normalized_registry = auth_manager._normalize_registry(registry)
+        
+        click.echo(f"Logging in to {normalized_registry}...")
+        
+        # Attempt login with credential verification
+        try:
+            auth_manager.login(
+                registry=registry,
+                username=username,
+                password=password,
+                verify_auth=True
+            )
+            
+            click.echo(f"✓ Login Succeeded")
+            click.echo(f"  Registry: {normalized_registry}")
+            click.echo(f"  Username: {username}")
+            
+        except InvalidCredentialsError as e:
+            click.echo(f"Error: Authentication failed for {normalized_registry}", err=True)
+            click.echo("Please check your username and password and try again.", err=True)
+            ctx.exit(1)
+        except AuthenticationError as e:
+            click.echo(f"Error: {e}", err=True)
+            click.echo("Please check your credentials and try again.", err=True)
+            ctx.exit(1)
+            
+    except KeyboardInterrupt:
+        click.echo("\nLogin cancelled.", err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(f"Unexpected error: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.argument('registry', default='docker.io')
+@click.pass_context
+def logout(ctx, registry: str):
+    """
+    Logout from a container registry.
+    
+    REGISTRY is the registry URL (default: docker.io for Docker Hub).
+    
+    Removes stored credentials from ~/.derpy/auth.json.
+    
+    Examples:
+    
+      derpy logout
+      
+      derpy logout registry.example.com
+    """
+    try:
+        # Create AuthManager instance
+        auth_manager = AuthManager()
+        
+        # Normalize registry URL for display
+        normalized_registry = auth_manager._normalize_registry(registry)
+        
+        # Attempt logout
+        removed = auth_manager.logout(registry)
+        
+        if removed:
+            click.echo(f"✓ Logged out from {normalized_registry}")
+            click.echo(f"  Credentials removed")
+        else:
+            click.echo(f"No credentials found for {normalized_registry}")
+            click.echo(f"  Already logged out or never logged in")
+            
+    except Exception as e:
+        click.echo(f"Unexpected error: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
 @click.argument('image')
 @click.option(
     '--registry',
-    help='Registry name from config or full registry URL (default: uses default registry from config)'
+    help='Registry name from config or full registry URL (default: inferred from image tag)'
 )
 @click.option(
     '--username',
-    help='Registry username (overrides config)'
+    help='Registry username (overrides stored credentials)'
 )
 @click.option(
     '--password',
-    help='Registry password (overrides config)'
+    help='Registry password (overrides stored credentials)'
 )
 @click.option(
     '--insecure',
@@ -365,62 +530,85 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
     """
     Push a container image to a remote registry.
     
-    IMAGE is the local image tag to push (e.g., myapp:latest).
+    IMAGE is the local image tag to push (e.g., myapp:latest or registry.example.com/myapp:latest).
     
-    The image will be pushed to the specified registry. If no registry is
-    specified, the default registry from the configuration will be used.
+    The registry is determined from the image tag. If the image tag includes a registry
+    (e.g., registry.example.com/myapp:latest), that registry will be used. Otherwise,
+    Docker Hub (registry-1.docker.io) is used by default.
+    
+    Credentials are automatically loaded from ~/.derpy/auth.json if available.
+    Use 'derpy login' to store credentials.
     
     Examples:
     
-      derpy push myapp:latest --registry docker.io --username myuser
+      derpy push myapp:latest
       
-      derpy push myapp:v1.0 --registry localhost:5000 --insecure
+      derpy push registry.example.com/myapp:v1.0
       
-      derpy push myapp:latest --registry myregistry
+      derpy push localhost:5000/myapp:latest --insecure
+      
+      derpy push myapp:latest --username myuser --password mypass
     """
     try:
         # Get configuration
         config_manager = ctx.obj['config_manager']
         config = config_manager.get_config()
         
-        # Determine registry configuration
-        registry_config = None
+        # Parse registry from image tag
+        registry_url = None
+        repository = image
         
-        if registry:
-            # Check if it's a named registry in config
-            if registry in config.registry_configs:
-                registry_config = config.registry_configs[registry]
-                click.echo(f"Using registry configuration: {registry}")
-            else:
-                # Treat as a registry URL
-                registry_config = RegistryConfig(
-                    url=registry if registry.startswith('http') else f"https://{registry}",
-                    username=username,
-                    password=password,
-                    insecure=insecure
-                )
-        else:
-            # Use default registry if configured
-            if 'default' in config.registry_configs:
-                registry_config = config.registry_configs['default']
-                click.echo("Using default registry from configuration")
-            else:
-                click.echo(
-                    "Error: No registry specified and no default registry configured.",
-                    err=True
-                )
-                click.echo()
-                click.echo("Please specify a registry with --registry or configure a default registry:")
-                click.echo("  derpy config set registry_configs.default.url https://registry.example.com")
-                ctx.exit(1)
+        # Check if image tag includes a registry (contains '/' and first part has '.' or ':')
+        if '/' in image:
+            first_part = image.split('/')[0]
+            if '.' in first_part or ':' in first_part:
+                # Image tag includes registry
+                registry_url = first_part
+                repository = image[len(first_part) + 1:]  # Remove registry from repository
         
-        # Override credentials if provided
-        if username:
-            registry_config.username = username
-        if password:
-            registry_config.password = password
-        if insecure:
-            registry_config.insecure = True
+        # If no registry in image tag, check --registry option or use Docker Hub
+        if not registry_url:
+            if registry:
+                registry_url = registry
+            else:
+                # Default to Docker Hub
+                registry_url = 'docker.io'
+        
+        # Create AuthManager instance
+        auth_manager = AuthManager()
+        
+        # Normalize registry URL
+        normalized_registry = auth_manager._normalize_registry(registry_url)
+        
+        # Get credentials from AuthManager (unless overridden by options)
+        credentials = None
+        if not username or not password:
+            credentials = auth_manager.get_credentials(registry_url)
+        
+        # Determine final username and password
+        final_username = username if username else (credentials.username if credentials else None)
+        final_password = password if password else (credentials.decode_password() if credentials else None)
+        
+        # Check if credentials are available
+        if not final_username or not final_password:
+            click.echo(
+                f"Error: No credentials found for registry: {normalized_registry}",
+                err=True
+            )
+            click.echo()
+            click.echo(f"Please login to the registry first:")
+            click.echo(f"  derpy login {registry_url}")
+            click.echo()
+            click.echo("Or provide credentials with --username and --password options.")
+            ctx.exit(1)
+        
+        # Create registry configuration
+        registry_config = RegistryConfig(
+            url=f"https://{normalized_registry}" if not normalized_registry.startswith('http') else normalized_registry,
+            username=final_username,
+            password=final_password,
+            insecure=insecure
+        )
         
         # Check if image exists locally
         image_manager = ImageManager()
@@ -430,7 +618,7 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
             click.echo("List available images with: derpy ls")
             ctx.exit(1)
         
-        click.echo(f"Pushing image '{image}' to {registry_config.url}...")
+        click.echo(f"Pushing image '{image}' to {normalized_registry}...")
         click.echo()
         
         # Create registry client
@@ -439,19 +627,21 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
             click.echo("Checking registry connectivity...")
             if not client.check_connectivity():
                 click.echo(
-                    f"Error: Cannot connect to registry at {registry_config.url}",
+                    f"Error: Cannot connect to registry at {normalized_registry}",
                     err=True
                 )
                 click.echo("Please verify the registry URL and network connectivity.")
                 ctx.exit(1)
             
-            # Verify authentication if credentials provided
-            if registry_config.username:
-                click.echo("Verifying authentication...")
-                if not client.verify_authentication():
-                    click.echo("Error: Authentication failed.", err=True)
-                    click.echo("Please check your username and password.")
-                    ctx.exit(1)
+            # Verify authentication
+            click.echo("Verifying authentication...")
+            if not client.verify_authentication():
+                click.echo(f"Error: Authentication failed for {normalized_registry}", err=True)
+                click.echo()
+                click.echo("Your credentials may be invalid or expired.")
+                click.echo(f"Please login again:")
+                click.echo(f"  derpy login {registry_url}")
+                ctx.exit(1)
             
             # Prepare image data
             click.echo("Preparing image data...")
@@ -490,6 +680,18 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
             
     except StorageError as e:
         click.echo(f"Storage error: {e}", err=True)
+        ctx.exit(1)
+    except RegistryAuthenticationError as e:
+        # Get registry_url from locals if available
+        reg_url = registry_url if 'registry_url' in locals() else 'REGISTRY'
+        norm_reg = normalized_registry if 'normalized_registry' in locals() else reg_url
+        
+        click.echo(f"Authentication error for {norm_reg}: {e}", err=True)
+        click.echo()
+        click.echo("Your credentials may be invalid, expired, or insufficient for this operation.")
+        click.echo()
+        click.echo("Please check your credentials and try logging in again:")
+        click.echo(f"  derpy login {reg_url}")
         ctx.exit(1)
     except RegistryError as e:
         click.echo(f"Registry error: {e}", err=True)

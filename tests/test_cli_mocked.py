@@ -137,5 +137,291 @@ class TestCLIErrorHandling:
             assert result.exit_code != 0
 
 
+class TestPushWithAuthentication:
+    """Test push command with authentication."""
+    
+    @patch('derpy.cli.main.RegistryClient')
+    @patch('derpy.cli.main.ImageManager')
+    @patch('derpy.cli.main.AuthManager')
+    def test_push_with_valid_credentials(
+        self,
+        mock_auth_manager_class,
+        mock_image_manager_class,
+        mock_registry_client_class
+    ):
+        """Test push with valid credentials from AuthManager."""
+        # Mock AuthManager
+        mock_auth_manager = Mock()
+        mock_credentials = Mock()
+        mock_credentials.username = 'testuser'
+        mock_credentials.decode_password.return_value = 'testpass'
+        mock_auth_manager.get_credentials.return_value = mock_credentials
+        mock_auth_manager._normalize_registry.return_value = 'registry-1.docker.io'
+        mock_auth_manager_class.return_value = mock_auth_manager
+        
+        # Mock ImageManager
+        mock_image_manager = Mock()
+        mock_image_manager.image_exists.return_value = True
+        mock_image_manager.prepare_image_for_push.return_value = (
+            b'manifest',
+            b'config',
+            [('sha256:abc', b'layer1')]
+        )
+        mock_image_manager_class.return_value = mock_image_manager
+        
+        # Mock RegistryClient
+        mock_client = Mock()
+        mock_client.check_connectivity.return_value = True
+        mock_client.verify_authentication.return_value = True
+        mock_client.push_image.return_value = {
+            'repository': 'myapp',
+            'tag': 'latest',
+            'manifest_digest': 'sha256:def'
+        }
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_registry_client_class.return_value = mock_client
+        
+        runner = CliRunner()
+        result = runner.invoke(cli, ['push', 'myapp:latest'])
+        
+        # Should succeed
+        assert result.exit_code == 0
+        assert 'successfully pushed' in result.output.lower()
+        
+        # Verify AuthManager was called
+        mock_auth_manager.get_credentials.assert_called_once()
+        
+        # Verify RegistryClient was created with credentials
+        mock_registry_client_class.assert_called_once()
+        call_args = mock_registry_client_class.call_args
+        registry_config = call_args[0][0]
+        assert registry_config.username == 'testuser'
+        assert registry_config.password == 'testpass'
+    
+    @patch('derpy.cli.main.ImageManager')
+    @patch('derpy.cli.main.AuthManager')
+    def test_push_without_credentials(
+        self,
+        mock_auth_manager_class,
+        mock_image_manager_class
+    ):
+        """Test push without credentials shows error."""
+        # Mock AuthManager with no credentials
+        mock_auth_manager = Mock()
+        mock_auth_manager.get_credentials.return_value = None
+        mock_auth_manager._normalize_registry.return_value = 'registry-1.docker.io'
+        mock_auth_manager_class.return_value = mock_auth_manager
+        
+        # Mock ImageManager
+        mock_image_manager = Mock()
+        mock_image_manager.image_exists.return_value = True
+        mock_image_manager_class.return_value = mock_image_manager
+        
+        runner = CliRunner()
+        result = runner.invoke(cli, ['push', 'myapp:latest'])
+        
+        # Should fail
+        assert result.exit_code != 0
+        assert 'no credentials found' in result.output.lower()
+        assert 'derpy login' in result.output.lower()
+    
+    @patch('derpy.cli.main.RegistryClient')
+    @patch('derpy.cli.main.ImageManager')
+    @patch('derpy.cli.main.AuthManager')
+    def test_push_with_invalid_credentials(
+        self,
+        mock_auth_manager_class,
+        mock_image_manager_class,
+        mock_registry_client_class
+    ):
+        """Test push with invalid credentials shows error."""
+        # Mock AuthManager
+        mock_auth_manager = Mock()
+        mock_credentials = Mock()
+        mock_credentials.username = 'testuser'
+        mock_credentials.decode_password.return_value = 'wrongpass'
+        mock_auth_manager.get_credentials.return_value = mock_credentials
+        mock_auth_manager._normalize_registry.return_value = 'registry-1.docker.io'
+        mock_auth_manager_class.return_value = mock_auth_manager
+        
+        # Mock ImageManager
+        mock_image_manager = Mock()
+        mock_image_manager.image_exists.return_value = True
+        mock_image_manager_class.return_value = mock_image_manager
+        
+        # Mock RegistryClient with failed authentication
+        mock_client = Mock()
+        mock_client.check_connectivity.return_value = True
+        mock_client.verify_authentication.return_value = False
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_registry_client_class.return_value = mock_client
+        
+        runner = CliRunner()
+        result = runner.invoke(cli, ['push', 'myapp:latest'])
+        
+        # Should fail
+        assert result.exit_code != 0
+        assert 'authentication failed' in result.output.lower()
+        assert 'derpy login' in result.output.lower()
+    
+    @patch('derpy.cli.main.RegistryClient')
+    @patch('derpy.cli.main.ImageManager')
+    @patch('derpy.cli.main.AuthManager')
+    def test_push_with_username_password_options(
+        self,
+        mock_auth_manager_class,
+        mock_image_manager_class,
+        mock_registry_client_class
+    ):
+        """Test push with username and password options overrides stored credentials."""
+        # Mock AuthManager (should not be used for credentials)
+        mock_auth_manager = Mock()
+        mock_auth_manager._normalize_registry.return_value = 'registry-1.docker.io'
+        mock_auth_manager_class.return_value = mock_auth_manager
+        
+        # Mock ImageManager
+        mock_image_manager = Mock()
+        mock_image_manager.image_exists.return_value = True
+        mock_image_manager.prepare_image_for_push.return_value = (
+            b'manifest',
+            b'config',
+            [('sha256:abc', b'layer1')]
+        )
+        mock_image_manager_class.return_value = mock_image_manager
+        
+        # Mock RegistryClient
+        mock_client = Mock()
+        mock_client.check_connectivity.return_value = True
+        mock_client.verify_authentication.return_value = True
+        mock_client.push_image.return_value = {
+            'repository': 'myapp',
+            'tag': 'latest',
+            'manifest_digest': 'sha256:def'
+        }
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_registry_client_class.return_value = mock_client
+        
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            'push', 'myapp:latest',
+            '--username', 'cmduser',
+            '--password', 'cmdpass'
+        ])
+        
+        # Should succeed
+        assert result.exit_code == 0
+        
+        # Verify RegistryClient was created with command-line credentials
+        mock_registry_client_class.assert_called_once()
+        call_args = mock_registry_client_class.call_args
+        registry_config = call_args[0][0]
+        assert registry_config.username == 'cmduser'
+        assert registry_config.password == 'cmdpass'
+    
+    @patch('derpy.cli.main.RegistryClient')
+    @patch('derpy.cli.main.ImageManager')
+    @patch('derpy.cli.main.AuthManager')
+    def test_push_with_registry_in_image_tag(
+        self,
+        mock_auth_manager_class,
+        mock_image_manager_class,
+        mock_registry_client_class
+    ):
+        """Test push with registry specified in image tag."""
+        # Mock AuthManager
+        mock_auth_manager = Mock()
+        mock_credentials = Mock()
+        mock_credentials.username = 'testuser'
+        mock_credentials.decode_password.return_value = 'testpass'
+        mock_auth_manager.get_credentials.return_value = mock_credentials
+        mock_auth_manager._normalize_registry.return_value = 'registry.example.com'
+        mock_auth_manager_class.return_value = mock_auth_manager
+        
+        # Mock ImageManager
+        mock_image_manager = Mock()
+        mock_image_manager.image_exists.return_value = True
+        mock_image_manager.prepare_image_for_push.return_value = (
+            b'manifest',
+            b'config',
+            [('sha256:abc', b'layer1')]
+        )
+        mock_image_manager_class.return_value = mock_image_manager
+        
+        # Mock RegistryClient
+        mock_client = Mock()
+        mock_client.check_connectivity.return_value = True
+        mock_client.verify_authentication.return_value = True
+        mock_client.push_image.return_value = {
+            'repository': 'myorg/myapp',
+            'tag': 'latest',
+            'manifest_digest': 'sha256:def'
+        }
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_registry_client_class.return_value = mock_client
+        
+        runner = CliRunner()
+        result = runner.invoke(cli, ['push', 'registry.example.com/myorg/myapp:latest'])
+        
+        # Should succeed
+        assert result.exit_code == 0
+        
+        # Verify AuthManager was called with correct registry
+        mock_auth_manager.get_credentials.assert_called_once_with('registry.example.com')
+    
+    @patch('derpy.cli.main.RegistryClient')
+    @patch('derpy.cli.main.ImageManager')
+    @patch('derpy.cli.main.AuthManager')
+    def test_push_authentication_error_during_push(
+        self,
+        mock_auth_manager_class,
+        mock_image_manager_class,
+        mock_registry_client_class
+    ):
+        """Test push handles authentication error during push operation."""
+        from derpy.core.exceptions import RegistryAuthenticationError
+        
+        # Mock AuthManager
+        mock_auth_manager = Mock()
+        mock_credentials = Mock()
+        mock_credentials.username = 'testuser'
+        mock_credentials.decode_password.return_value = 'testpass'
+        mock_auth_manager.get_credentials.return_value = mock_credentials
+        mock_auth_manager._normalize_registry.return_value = 'registry-1.docker.io'
+        mock_auth_manager_class.return_value = mock_auth_manager
+        
+        # Mock ImageManager
+        mock_image_manager = Mock()
+        mock_image_manager.image_exists.return_value = True
+        mock_image_manager.prepare_image_for_push.return_value = (
+            b'manifest',
+            b'config',
+            [('sha256:abc', b'layer1')]
+        )
+        mock_image_manager_class.return_value = mock_image_manager
+        
+        # Mock RegistryClient that raises authentication error during push
+        mock_client = Mock()
+        mock_client.check_connectivity.return_value = True
+        mock_client.verify_authentication.return_value = True
+        mock_client.push_image.side_effect = RegistryAuthenticationError(
+            "Token expired during push"
+        )
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=False)
+        mock_registry_client_class.return_value = mock_client
+        
+        runner = CliRunner()
+        result = runner.invoke(cli, ['push', 'myapp:latest'])
+        
+        # Should fail with authentication error
+        assert result.exit_code != 0
+        assert 'authentication error' in result.output.lower()
+        assert 'derpy login' in result.output.lower()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

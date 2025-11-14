@@ -13,7 +13,8 @@ from derpy.build.models import ImageReference
 from derpy.oci.models import Image, Manifest, ImageConfig, Layer, Descriptor, RootFS, ContainerConfig
 from derpy.oci.models import MEDIA_TYPE_IMAGE_CONFIG, MEDIA_TYPE_IMAGE_LAYER, MEDIA_TYPE_IMAGE_MANIFEST
 from derpy.storage.manager import ImageManager
-from derpy.core.exceptions import BaseImageError
+from derpy.core.exceptions import BaseImageError, RegistryAuthenticationError
+from derpy.core.auth import AuthManager, RegistryCredentials
 
 
 class TestImageReferenceParsing:
@@ -367,3 +368,297 @@ class TestBaseImageManagerErrors:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestBaseImageAuthentication:
+    """Tests for authentication integration in BaseImageManager."""
+    
+    def test_pull_with_credentials(self):
+        """Test pulling image with stored credentials."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            storage.get_image.return_value = None  # Cache miss
+            
+            # Create mock auth manager with credentials
+            auth_manager = Mock(spec=AuthManager)
+            credentials = RegistryCredentials(
+                registry="registry-1.docker.io",
+                username="testuser",
+                password=RegistryCredentials.encode_password("testpass")
+            )
+            auth_manager.get_credentials.return_value = credentials
+            
+            manager = BaseImageManager(storage, Path(tmpdir), auth_manager=auth_manager)
+            
+            # Mock the registry client
+            with patch('derpy.build.base_image.RegistryClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                
+                # Mock pull_image to return test data
+                manifest_data = {
+                    "schemaVersion": 2,
+                    "mediaType": MEDIA_TYPE_IMAGE_MANIFEST,
+                    "config": {
+                        "mediaType": MEDIA_TYPE_IMAGE_CONFIG,
+                        "digest": "sha256:config123",
+                        "size": 100
+                    },
+                    "layers": []
+                }
+                config_data = {
+                    "architecture": "amd64",
+                    "os": "linux",
+                    "rootfs": {"type": "layers", "diff_ids": []},
+                    "config": {}
+                }
+                
+                import json
+                mock_client.pull_image.return_value = (
+                    json.dumps(manifest_data).encode(),
+                    json.dumps(config_data).encode(),
+                    []
+                )
+                
+                result = manager.pull_base_image("myuser/private:latest")
+                
+                # Verify credentials were checked
+                auth_manager.get_credentials.assert_called_once_with("docker.io")
+                
+                # Verify RegistryClient was created with credentials
+                assert mock_client_class.called
+                call_args = mock_client_class.call_args
+                registry_config = call_args[0][0]
+                assert registry_config.username == "testuser"
+                assert registry_config.password == "testpass"
+    
+    def test_pull_without_credentials(self):
+        """Test pulling image without credentials (anonymous)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            storage.get_image.return_value = None  # Cache miss
+            
+            # Create mock auth manager with no credentials
+            auth_manager = Mock(spec=AuthManager)
+            auth_manager.get_credentials.return_value = None
+            
+            manager = BaseImageManager(storage, Path(tmpdir), auth_manager=auth_manager)
+            
+            # Mock the registry client
+            with patch('derpy.build.base_image.RegistryClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                
+                # Mock pull_image to return test data
+                manifest_data = {
+                    "schemaVersion": 2,
+                    "mediaType": MEDIA_TYPE_IMAGE_MANIFEST,
+                    "config": {
+                        "mediaType": MEDIA_TYPE_IMAGE_CONFIG,
+                        "digest": "sha256:config123",
+                        "size": 100
+                    },
+                    "layers": []
+                }
+                config_data = {
+                    "architecture": "amd64",
+                    "os": "linux",
+                    "rootfs": {"type": "layers", "diff_ids": []},
+                    "config": {}
+                }
+                
+                import json
+                mock_client.pull_image.return_value = (
+                    json.dumps(manifest_data).encode(),
+                    json.dumps(config_data).encode(),
+                    []
+                )
+                
+                result = manager.pull_base_image("nginx:latest")
+                
+                # Verify credentials were checked
+                auth_manager.get_credentials.assert_called_once_with("docker.io")
+                
+                # Verify RegistryClient was created without credentials
+                assert mock_client_class.called
+                call_args = mock_client_class.call_args
+                registry_config = call_args[0][0]
+                assert registry_config.username is None
+                assert registry_config.password is None
+    
+    def test_pull_with_authentication_error(self):
+        """Test handling authentication errors during pull."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            storage.get_image.return_value = None  # Cache miss
+            
+            # Create mock auth manager with no credentials
+            auth_manager = Mock(spec=AuthManager)
+            auth_manager.get_credentials.return_value = None
+            
+            manager = BaseImageManager(storage, Path(tmpdir), auth_manager=auth_manager)
+            
+            # Mock the registry client to raise authentication error
+            with patch('derpy.build.base_image.RegistryClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                mock_client.pull_image.side_effect = RegistryAuthenticationError("registry.example.com")
+                
+                with pytest.raises(BaseImageError) as exc_info:
+                    manager.pull_base_image("registry.example.com/private:latest")
+                
+                # Verify error message suggests login
+                error_msg = str(exc_info.value)
+                assert "Authentication failed" in error_msg
+                assert "derpy login" in error_msg
+                assert "registry.example.com" in error_msg
+    
+    def test_pull_with_invalid_credentials(self):
+        """Test handling invalid credentials during pull."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            storage.get_image.return_value = None  # Cache miss
+            
+            # Create mock auth manager with credentials
+            auth_manager = Mock(spec=AuthManager)
+            credentials = RegistryCredentials(
+                registry="registry.example.com",
+                username="testuser",
+                password=RegistryCredentials.encode_password("wrongpass")
+            )
+            auth_manager.get_credentials.return_value = credentials
+            
+            manager = BaseImageManager(storage, Path(tmpdir), auth_manager=auth_manager)
+            
+            # Mock the registry client to raise 401 error
+            with patch('derpy.build.base_image.RegistryClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                mock_client.pull_image.side_effect = Exception("401 unauthorized")
+                
+                with pytest.raises(BaseImageError) as exc_info:
+                    manager.pull_base_image("registry.example.com/private:latest")
+                
+                # Verify error message suggests login
+                error_msg = str(exc_info.value)
+                assert "Authentication failed" in error_msg
+                assert "derpy login" in error_msg
+    
+    @pytest.mark.skipif(not hasattr(pytest, 'mark'), reason="Requires pytest markers")
+    def test_sudo_build_uses_user_credentials(self):
+        """Test that sudo builds use SUDO_USER's credentials."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            
+            # Mock os.geteuid to return 0 (root)
+            with patch('os.geteuid', return_value=0):
+                # Mock SUDO_USER environment variable
+                with patch.dict('os.environ', {'SUDO_USER': 'testuser'}):
+                    # Mock pwd.getpwnam to return user info
+                    with patch('pwd.getpwnam') as mock_getpwnam:
+                        mock_user_info = Mock()
+                        mock_user_info.pw_dir = tmpdir
+                        mock_getpwnam.return_value = mock_user_info
+                        
+                        # Create manager
+                        manager = BaseImageManager(storage, Path(tmpdir))
+                        
+                        # Verify auth manager uses SUDO_USER's home directory
+                        expected_auth_file = Path(tmpdir) / ".derpy" / "auth.json"
+                        assert manager.auth_manager.auth_file == expected_auth_file
+    
+    def test_token_auth_enabled_for_docker_hub(self):
+        """Test that token authentication is enabled for Docker Hub."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            storage.get_image.return_value = None  # Cache miss
+            
+            auth_manager = Mock(spec=AuthManager)
+            auth_manager.get_credentials.return_value = None
+            
+            manager = BaseImageManager(storage, Path(tmpdir), auth_manager=auth_manager)
+            
+            # Mock the registry client
+            with patch('derpy.build.base_image.RegistryClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                
+                # Mock pull_image to return test data
+                manifest_data = {
+                    "schemaVersion": 2,
+                    "mediaType": MEDIA_TYPE_IMAGE_MANIFEST,
+                    "config": {
+                        "mediaType": MEDIA_TYPE_IMAGE_CONFIG,
+                        "digest": "sha256:config123",
+                        "size": 100
+                    },
+                    "layers": []
+                }
+                config_data = {
+                    "architecture": "amd64",
+                    "os": "linux",
+                    "rootfs": {"type": "layers", "diff_ids": []},
+                    "config": {}
+                }
+                
+                import json
+                mock_client.pull_image.return_value = (
+                    json.dumps(manifest_data).encode(),
+                    json.dumps(config_data).encode(),
+                    []
+                )
+                
+                result = manager.pull_base_image("nginx:latest")
+                
+                # Verify RegistryClient was created with enable_token_auth=True
+                assert mock_client_class.called
+                call_args = mock_client_class.call_args
+                assert call_args[1].get('enable_token_auth') == True
+    
+    def test_token_auth_disabled_for_private_registry(self):
+        """Test that token authentication is not enabled for private registries."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = Mock(spec=ImageManager)
+            storage.get_image.return_value = None  # Cache miss
+            
+            auth_manager = Mock(spec=AuthManager)
+            auth_manager.get_credentials.return_value = None
+            
+            manager = BaseImageManager(storage, Path(tmpdir), auth_manager=auth_manager)
+            
+            # Mock the registry client
+            with patch('derpy.build.base_image.RegistryClient') as mock_client_class:
+                mock_client = MagicMock()
+                mock_client_class.return_value.__enter__.return_value = mock_client
+                
+                # Mock pull_image to return test data
+                manifest_data = {
+                    "schemaVersion": 2,
+                    "mediaType": MEDIA_TYPE_IMAGE_MANIFEST,
+                    "config": {
+                        "mediaType": MEDIA_TYPE_IMAGE_CONFIG,
+                        "digest": "sha256:config123",
+                        "size": 100
+                    },
+                    "layers": []
+                }
+                config_data = {
+                    "architecture": "amd64",
+                    "os": "linux",
+                    "rootfs": {"type": "layers", "diff_ids": []},
+                    "config": {}
+                }
+                
+                import json
+                mock_client.pull_image.return_value = (
+                    json.dumps(manifest_data).encode(),
+                    json.dumps(config_data).encode(),
+                    []
+                )
+                
+                result = manager.pull_base_image("registry.example.com/app:latest")
+                
+                # Verify RegistryClient was created with enable_token_auth=False
+                assert mock_client_class.called
+                call_args = mock_client_class.call_args
+                assert call_args[1].get('enable_token_auth') == False

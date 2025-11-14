@@ -143,11 +143,10 @@ class TestRegistryClientBlobOperations:
         
         mock_response = Mock()
         mock_response.status_code = 200
-        client.session.head = Mock(return_value=mock_response)
         
-        result = client.blob_exists("myrepo", "sha256:abc123")
-        
-        assert result is True
+        with patch.object(client, '_request', return_value=mock_response):
+            result = client.blob_exists("myrepo", "sha256:abc123")
+            assert result is True
     
     def test_blob_exists_false(self):
         """Test blob_exists returns False when blob doesn't exist."""
@@ -156,11 +155,10 @@ class TestRegistryClientBlobOperations:
         
         mock_response = Mock()
         mock_response.status_code = 404
-        client.session.head = Mock(return_value=mock_response)
         
-        result = client.blob_exists("myrepo", "sha256:abc123")
-        
-        assert result is False
+        with patch.object(client, '_request', return_value=mock_response):
+            result = client.blob_exists("myrepo", "sha256:abc123")
+            assert result is False
     
     def test_blob_exists_error(self):
         """Test blob_exists raises error on request failure."""
@@ -205,10 +203,10 @@ class TestRegistryClientUploadBlob:
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.text = "Internal error"
-        client.session.post = Mock(return_value=mock_response)
         
-        with pytest.raises(RegistryError, match="Failed to initiate blob upload"):
-            client.upload_blob("myrepo", b"data", "sha256:abc123")
+        with patch.object(client, '_request', return_value=mock_response):
+            with pytest.raises(RegistryError, match="Failed to initiate blob upload"):
+                client.upload_blob("myrepo", b"data", "sha256:abc123")
     
     def test_upload_blob_no_location_header(self):
         """Test upload_blob raises error if no Location header."""
@@ -220,10 +218,10 @@ class TestRegistryClientUploadBlob:
         mock_response = Mock()
         mock_response.status_code = 202
         mock_response.headers = {}
-        client.session.post = Mock(return_value=mock_response)
         
-        with pytest.raises(RegistryError, match="did not provide upload location"):
-            client.upload_blob("myrepo", b"data", "sha256:abc123")
+        with patch.object(client, '_request', return_value=mock_response):
+            with pytest.raises(RegistryError, match="did not provide upload location"):
+                client.upload_blob("myrepo", b"data", "sha256:abc123")
     
     def test_upload_blob_timeout(self):
         """Test upload_blob raises error on timeout."""
@@ -232,10 +230,10 @@ class TestRegistryClientUploadBlob:
         client = RegistryClient(config)
         
         client.blob_exists = Mock(return_value=False)
-        client.session.post = Mock(side_effect=requests.Timeout("Upload timeout"))
         
-        with pytest.raises(RegistryError, match="Blob upload timeout"):
-            client.upload_blob("myrepo", b"data", "sha256:abc123")
+        with patch.object(client, '_request', side_effect=requests.Timeout("Upload timeout")):
+            with pytest.raises(RegistryError, match="Blob upload timeout"):
+                client.upload_blob("myrepo", b"data", "sha256:abc123")
 
 
 class TestRegistryClientManifestOperations:
@@ -249,16 +247,16 @@ class TestRegistryClientManifestOperations:
         mock_response = Mock()
         mock_response.status_code = 201
         mock_response.headers = {'Docker-Content-Digest': 'sha256:manifest123'}
-        client.session.put = Mock(return_value=mock_response)
         
-        digest = client.upload_manifest(
-            "myrepo",
-            "latest",
-            b'{"test": "manifest"}',
-            "application/vnd.oci.image.manifest.v1+json"
-        )
-        
-        assert digest == "sha256:manifest123"
+        with patch.object(client, '_request', return_value=mock_response):
+            digest = client.upload_manifest(
+                "myrepo",
+                "latest",
+                b'{"test": "manifest"}',
+                "application/vnd.oci.image.manifest.v1+json"
+            )
+            
+            assert digest == "sha256:manifest123"
     
     def test_upload_manifest_failure(self):
         """Test manifest upload failure."""
@@ -284,15 +282,14 @@ class TestRegistryClientManifestOperations:
         config = RegistryConfig(url="https://registry.example.com")
         client = RegistryClient(config)
         
-        client.session.put = Mock(side_effect=requests.Timeout("Timeout"))
-        
-        with pytest.raises(RegistryError, match="Manifest upload timeout"):
-            client.upload_manifest(
-                "myrepo",
-                "latest",
-                b'{"test": "manifest"}',
-                "application/vnd.oci.image.manifest.v1+json"
-            )
+        with patch.object(client, '_request', side_effect=requests.Timeout("Timeout")):
+            with pytest.raises(RegistryError, match="Manifest upload timeout"):
+                client.upload_manifest(
+                    "myrepo",
+                    "latest",
+                    b'{"test": "manifest"}',
+                    "application/vnd.oci.image.manifest.v1+json"
+                )
 
 
 class TestRegistryClientVerifyAuth:
@@ -305,10 +302,10 @@ class TestRegistryClientVerifyAuth:
         
         mock_response = Mock()
         mock_response.status_code = 500
-        client.session.get = Mock(return_value=mock_response)
         
-        with pytest.raises(RegistryError, match="unexpected status"):
-            client.verify_authentication()
+        with patch.object(client, '_request', return_value=mock_response):
+            with pytest.raises(RegistryError, match="unexpected status"):
+                client.verify_authentication()
     
     def test_verify_authentication_timeout(self):
         """Test verify_authentication with timeout."""
@@ -316,10 +313,9 @@ class TestRegistryClientVerifyAuth:
         config = RegistryConfig(url="https://registry.example.com")
         client = RegistryClient(config)
         
-        client.session.get = Mock(side_effect=requests.Timeout("Timeout"))
-        
-        with pytest.raises(RegistryError, match="connection timeout"):
-            client.verify_authentication()
+        with patch.object(client, '_request', side_effect=requests.Timeout("Timeout")):
+            with pytest.raises(RegistryError, match="connection timeout"):
+                client.verify_authentication()
     
     def test_verify_authentication_connection_error(self):
         """Test verify_authentication with connection error."""

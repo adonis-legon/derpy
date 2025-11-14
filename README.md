@@ -152,6 +152,78 @@ Configuration options:
 - `base_image_cache_dir`: Directory for caching downloaded base images (default: ~/.derpy/cache/base-images)
 - `chroot_timeout`: Maximum time in seconds for RUN commands in chroot (default: 300)
 
+### Authentication
+
+Derpy supports authentication with container registries for pulling private base images and pushing images to authenticated registries.
+
+#### Login to a Registry
+
+Authenticate with a container registry:
+
+```bash
+derpy login [REGISTRY]
+```
+
+If no registry is specified, Docker Hub (`docker.io`) is used by default.
+
+Examples:
+
+```bash
+# Login to Docker Hub (interactive prompts)
+derpy login
+
+# Login to Docker Hub with username and password
+derpy login -u myusername -p mypassword
+
+# Login to a private registry
+derpy login registry.example.com
+
+# Login with password from stdin (useful for CI/CD)
+echo "$PASSWORD" | derpy login --password-stdin registry.example.com
+```
+
+Options:
+
+- `-u, --username`: Username for authentication
+- `-p, --password`: Password for authentication (not recommended for security reasons)
+- `--password-stdin`: Read password from standard input
+
+**Security Note**: For interactive use, it's recommended to omit the password option and let Derpy prompt you securely. This prevents the password from appearing in your shell history.
+
+#### Logout from a Registry
+
+Remove stored credentials for a registry:
+
+```bash
+derpy logout [REGISTRY]
+```
+
+Examples:
+
+```bash
+# Logout from Docker Hub
+derpy logout
+
+# Logout from a private registry
+derpy logout registry.example.com
+```
+
+#### Credential Storage
+
+Credentials are stored securely in `~/.derpy/auth.json` with the following characteristics:
+
+- File permissions are automatically set to `0600` (owner read/write only)
+- Passwords are base64-encoded (not encrypted, but not plaintext)
+- Multiple registry credentials can be stored simultaneously
+- Credentials persist across sessions until explicitly removed with `logout`
+
+**Security Considerations**:
+
+- The auth file is protected with restrictive permissions (0600)
+- Only the file owner can read or write credentials
+- Derpy warns if incorrect permissions are detected and automatically fixes them
+- For maximum security, use `derpy logout` when credentials are no longer needed
+
 ### Getting Help
 
 Get help for any command:
@@ -274,6 +346,108 @@ CMD ["/bin/sh"]
 
 See the `examples/` directory for more sample Dockerfiles.
 
+## Authentication Examples
+
+### Docker Hub Authentication
+
+Docker Hub allows anonymous pulls for public images, but authenticated users get higher rate limits and access to private repositories.
+
+```bash
+# Login to Docker Hub
+derpy login
+# Enter username and password when prompted
+
+# Build with a public base image (works with or without authentication)
+derpy build . -f Dockerfile -t myapp:latest
+
+# Build with a private base image (requires authentication)
+# Dockerfile: FROM myusername/private-base:latest
+sudo derpy build . -f Dockerfile -t myapp:latest
+
+# Push to Docker Hub (requires authentication)
+derpy push myusername/myapp:latest
+
+# Logout when done
+derpy logout
+```
+
+### Private Registry Authentication
+
+For self-hosted or third-party private registries:
+
+```bash
+# Login to private registry
+derpy login registry.example.com
+# Enter username and password when prompted
+
+# Build with private base image from your registry
+# Dockerfile: FROM registry.example.com/base-images/ubuntu:22.04
+sudo derpy build . -f Dockerfile -t myapp:latest
+
+# Push to private registry
+derpy push registry.example.com/myteam/myapp:v1.0
+
+# Logout when done
+derpy logout registry.example.com
+```
+
+### AWS ECR Authentication
+
+Amazon Elastic Container Registry (ECR) uses temporary tokens for authentication:
+
+```bash
+# Get ECR login token (requires AWS CLI)
+aws ecr get-login-password --region us-east-1 | derpy login --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com -u AWS
+
+# Build with ECR base image
+# Dockerfile: FROM 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-base:latest
+sudo derpy build . -f Dockerfile -t myapp:latest
+
+# Push to ECR
+derpy push 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp:v1.0
+
+# Note: ECR tokens expire after 12 hours
+# Re-authenticate if you see authentication errors
+```
+
+### CI/CD Pipeline Authentication
+
+For automated builds in CI/CD environments:
+
+```bash
+# Using environment variables and stdin (GitHub Actions, GitLab CI, etc.)
+echo "$REGISTRY_PASSWORD" | derpy login --password-stdin registry.example.com -u "$REGISTRY_USERNAME"
+
+# Build and push
+sudo derpy build . -f Dockerfile -t registry.example.com/myapp:$CI_COMMIT_TAG
+derpy push registry.example.com/myapp:$CI_COMMIT_TAG
+
+# Cleanup
+derpy logout registry.example.com
+```
+
+### Building with Private Base Images
+
+When your Dockerfile uses a private base image, ensure you're authenticated before building:
+
+```dockerfile
+# Dockerfile
+FROM registry.example.com/internal/python-base:3.11
+RUN pip install flask
+CMD ["python", "app.py"]
+```
+
+```bash
+# Authenticate first
+derpy login registry.example.com
+
+# Build (requires sudo for isolation on Linux)
+sudo derpy build . -f Dockerfile -t myapp:latest
+
+# Note: When using sudo, derpy automatically uses your user's credentials
+# from ~/.derpy/auth.json (not root's credentials)
+```
+
 ## Troubleshooting
 
 ### Build Isolation Issues
@@ -371,6 +545,128 @@ derpy config set images_path ~/custom/derpy/images
 **Problem**: Build fails with "unsupported instruction" error.
 
 **Solution**: Derpy v0.1.0 only supports FROM, RUN, and CMD instructions. Remove or comment out unsupported instructions like COPY, ADD, ENV, etc. These will be added in future releases.
+
+### Authentication Failed
+
+**Problem**: Login fails with "Authentication failed" error.
+
+**Solution**:
+
+1. Verify your username and password are correct
+2. Check if the registry URL is correct (e.g., `registry.example.com` not `https://registry.example.com`)
+3. For Docker Hub, use your Docker Hub username (not email)
+4. Ensure the registry is accessible: `curl -I https://registry.example.com/v2/`
+5. Check if your account has the necessary permissions
+6. For ECR, ensure your AWS credentials are valid and have ECR permissions
+
+```bash
+# Try logging in again with correct credentials
+derpy login registry.example.com
+
+# For Docker Hub, use your username (not email)
+derpy login -u myusername
+```
+
+### No Credentials Found
+
+**Problem**: Build or push fails with "No credentials found for registry" error.
+
+**Solution**: You need to authenticate with the registry before pulling private images or pushing:
+
+```bash
+# Login to the registry
+derpy login registry.example.com
+
+# Then retry your build or push
+sudo derpy build . -f Dockerfile -t myapp:latest
+derpy push registry.example.com/myapp:latest
+```
+
+**Note**: Docker Hub public images can be pulled without authentication, but private images require login.
+
+### Token Request Failed
+
+**Problem**: Build fails with "Failed to obtain authentication token" error.
+
+**Solution**:
+
+1. Check network connectivity to the authentication service
+2. Verify the registry's authentication endpoint is accessible
+3. For Docker Hub, ensure `https://auth.docker.io` is reachable
+4. Check for firewall or proxy issues blocking the token request
+5. Try logging out and back in:
+
+```bash
+derpy logout registry.example.com
+derpy login registry.example.com
+```
+
+### Rate Limit Exceeded
+
+**Problem**: Pull fails with "rate limit exceeded" or "too many requests" error.
+
+**Solution**: Docker Hub enforces rate limits on anonymous pulls (100 pulls per 6 hours per IP). Authenticated users get higher limits (200 pulls per 6 hours).
+
+```bash
+# Login to Docker Hub for higher rate limits
+derpy login
+
+# Then retry your build
+sudo derpy build . -f Dockerfile -t myapp:latest
+```
+
+**Alternative solutions**:
+
+- Wait for the rate limit window to reset (6 hours)
+- Use a Docker Hub Pro account for unlimited pulls
+- Use a private registry or mirror
+- Cache base images locally (Derpy does this automatically in `~/.derpy/cache/base-images/`)
+
+### ECR Token Expired
+
+**Problem**: AWS ECR authentication fails with "authorization token has expired" error.
+
+**Solution**: ECR tokens expire after 12 hours. Re-authenticate with a fresh token:
+
+```bash
+# Get a new ECR token
+aws ecr get-login-password --region us-east-1 | \
+  derpy login --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com -u AWS
+
+# Then retry your operation
+sudo derpy build . -f Dockerfile -t myapp:latest
+```
+
+**For CI/CD**: Ensure your pipeline re-authenticates before each build, as tokens may expire between runs.
+
+### Sudo Build Cannot Find Credentials
+
+**Problem**: Building with `sudo` fails to find credentials even after logging in.
+
+**Solution**: Derpy automatically detects when running under `sudo` and uses the original user's credentials from their home directory. However, if this fails:
+
+1. Ensure you logged in as your regular user (not as root):
+
+```bash
+# Login as your regular user (without sudo)
+derpy login registry.example.com
+
+# Then build with sudo
+sudo derpy build . -f Dockerfile -t myapp:latest
+```
+
+2. Check that the `SUDO_USER` environment variable is set:
+
+```bash
+sudo env | grep SUDO_USER
+```
+
+3. Verify your auth file exists and has correct permissions:
+
+```bash
+ls -la ~/.derpy/auth.json
+# Should show: -rw------- (permissions 600)
+```
 
 ## FAQ
 

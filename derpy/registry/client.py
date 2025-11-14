@@ -35,11 +35,12 @@ class RegistryClient:
         r'(:[0-9]{1,5})?(/.*)?$'
     )
     
-    def __init__(self, registry_config: RegistryConfig):
+    def __init__(self, registry_config: RegistryConfig, enable_token_auth: bool = True):
         """Initialize registry client.
         
         Args:
             registry_config: Registry configuration with URL and credentials
+            enable_token_auth: Enable automatic token authentication (default: True)
             
         Raises:
             RegistryError: If registry configuration is invalid
@@ -58,6 +59,11 @@ class RegistryClient:
                 registry_config.username,
                 registry_config.password
             )
+        
+        # Token authentication support
+        self.enable_token_auth = enable_token_auth
+        self.token: Optional[str] = None
+        self.token_scope: Optional[str] = None
         
         # Setup session
         self.session = requests.Session()
@@ -114,10 +120,7 @@ class RegistryClient:
             True if registry is reachable and compatible, False otherwise
         """
         try:
-            response = self.session.get(
-                self.base_url + "/",
-                timeout=10
-            )
+            response = self._request('GET', self.base_url + "/", timeout=10)
             
             # Registry should return 200 or 401 (if auth required)
             if response.status_code in (200, 401):
@@ -131,6 +134,9 @@ class RegistryClient:
     def verify_authentication(self) -> bool:
         """Verify that authentication credentials are valid.
         
+        Tests credentials by making a GET request to the /v2/ endpoint.
+        Handles both Basic and Bearer token authentication.
+        
         Returns:
             True if authenticated successfully, False otherwise
             
@@ -138,10 +144,7 @@ class RegistryClient:
             RegistryError: If registry is unreachable
         """
         try:
-            response = self.session.get(
-                self.base_url + "/",
-                timeout=10
-            )
+            response = self._request('GET', self.base_url + "/", timeout=10)
             
             # 200 means authenticated or no auth required
             if response.status_code == 200:
@@ -256,7 +259,7 @@ class RegistryClient:
         """
         try:
             url = self._get_blob_url(repository, digest)
-            response = self.session.head(url, timeout=10)
+            response = self._request('HEAD', url, timeout=10)
             
             return response.status_code == 200
             
@@ -292,7 +295,7 @@ class RegistryClient:
             
             # Initiate upload
             upload_url = self._get_blob_upload_url(repository)
-            response = self.session.post(upload_url, timeout=30)
+            response = self._request('POST', upload_url, timeout=30)
             
             if response.status_code not in (202, 201):
                 raise RegistryError(
@@ -320,7 +323,8 @@ class RegistryClient:
                 'Content-Length': str(len(blob_data))
             }
             
-            response = self.session.put(
+            response = self._request(
+                'PUT',
                 upload_location,
                 data=blob_data,
                 headers=headers,
@@ -371,7 +375,8 @@ class RegistryClient:
                 'Content-Type': media_type
             }
             
-            response = self.session.put(
+            response = self._request(
+                'PUT',
                 url,
                 data=manifest_data,
                 headers=headers,
@@ -505,7 +510,7 @@ class RegistryClient:
                 ])
             }
             
-            response = self.session.get(url, headers=headers, timeout=30)
+            response = self._request('GET', url, headers=headers, timeout=30)
             
             if response.status_code == 404:
                 raise RegistryError(
@@ -553,7 +558,7 @@ class RegistryClient:
         try:
             url = self._get_blob_url(repository, digest)
             
-            response = self.session.get(url, stream=True, timeout=30)
+            response = self._request('GET', url, stream=True, timeout=30)
             
             if response.status_code == 404:
                 raise RegistryError(
@@ -651,6 +656,206 @@ class RegistryClient:
             raise
         except Exception as e:
             raise RegistryError(f"Failed to pull image: {e}")
+    
+    def _parse_www_authenticate(self, header: str) -> Dict[str, str]:
+        """Parse WWW-Authenticate header.
+        
+        Parses authentication challenges from WWW-Authenticate headers,
+        supporting both Bearer and Basic authentication schemes.
+        
+        Example input:
+            Bearer realm="https://auth.docker.io/token",
+                   service="registry.docker.io",
+                   scope="repository:library/nginx:pull"
+        
+        Args:
+            header: WWW-Authenticate header value
+            
+        Returns:
+            Dictionary with scheme and parameters (realm, service, scope, etc.)
+            Returns empty dict if parsing fails
+        """
+        if not header:
+            return {}
+        
+        # Split scheme and parameters
+        parts = header.split(' ', 1)
+        if len(parts) != 2:
+            return {}
+        
+        scheme, params_str = parts
+        
+        # Parse parameters
+        params = {'scheme': scheme}
+        
+        # Handle comma-separated key=value pairs
+        # Use regex to handle quoted values properly
+        import re
+        param_pattern = re.compile(r'(\w+)="([^"]*)"')
+        
+        for match in param_pattern.finditer(params_str):
+            key, value = match.groups()
+            params[key] = value
+        
+        return params
+    
+    def _request_token(
+        self,
+        realm: str,
+        service: str,
+        scope: str
+    ) -> Optional[str]:
+        """Request bearer token from auth service.
+        
+        Makes a GET request to the token endpoint to obtain a bearer token
+        for accessing registry resources. Includes credentials if available
+        for authenticated tokens.
+        
+        Args:
+            realm: Token endpoint URL
+            service: Service name (e.g., "registry.docker.io")
+            scope: Access scope (e.g., "repository:library/nginx:pull")
+            
+        Returns:
+            Bearer token if successful, None otherwise
+        """
+        try:
+            # Build token request URL
+            params = {
+                'service': service,
+                'scope': scope
+            }
+            
+            # Create a new session for token request (don't use self.session)
+            # to avoid auth loops
+            token_session = requests.Session()
+            token_session.verify = self.session.verify
+            
+            # Include credentials if available for authenticated tokens
+            auth = None
+            if self.auth:
+                auth = self.auth
+            
+            response = token_session.get(
+                realm,
+                params=params,
+                auth=auth,
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                return None
+            
+            # Parse token response
+            token_data = response.json()
+            
+            # Token can be in 'token' or 'access_token' field
+            token = token_data.get('token') or token_data.get('access_token')
+            
+            return token
+            
+        except Exception:
+            # Silently fail and return None
+            return None
+    
+    def _handle_auth_challenge(
+        self,
+        response: requests.Response,
+        original_url: str
+    ) -> Optional[str]:
+        """Handle WWW-Authenticate challenge and obtain token.
+        
+        Parses the WWW-Authenticate header from a 401 response and
+        requests a bearer token from the authentication service.
+        
+        Args:
+            response: 401 response with WWW-Authenticate header
+            original_url: Original request URL for scope determination
+            
+        Returns:
+            Bearer token if successful, None otherwise
+        """
+        # Get WWW-Authenticate header
+        www_auth = response.headers.get('Www-Authenticate')
+        if not www_auth:
+            return None
+        
+        # Parse authentication challenge
+        auth_params = self._parse_www_authenticate(www_auth)
+        
+        # Only handle Bearer authentication
+        if auth_params.get('scheme') != 'Bearer':
+            return None
+        
+        # Extract required parameters
+        realm = auth_params.get('realm')
+        service = auth_params.get('service')
+        scope = auth_params.get('scope')
+        
+        if not realm or not service:
+            return None
+        
+        # If no scope in challenge, try to infer from URL
+        if not scope:
+            scope = ''
+        
+        # Request token
+        token = self._request_token(realm, service, scope)
+        
+        # Cache token and scope
+        if token:
+            self.token = token
+            self.token_scope = scope
+        
+        return token
+    
+    def _request(
+        self,
+        method: str,
+        url: str,
+        **kwargs
+    ) -> requests.Response:
+        """Make HTTP request with automatic token authentication.
+        
+        Handles 401 responses by:
+        1. Parsing WWW-Authenticate header
+        2. Requesting token from auth service
+        3. Retrying request with token
+        
+        Args:
+            method: HTTP method (GET, POST, PUT, etc.)
+            url: Request URL
+            **kwargs: Additional request arguments
+            
+        Returns:
+            Response object
+            
+        Raises:
+            RegistryAuthenticationError: If authentication fails
+        """
+        # If we have a cached token, use it
+        if self.token and self.enable_token_auth:
+            if 'headers' not in kwargs:
+                kwargs['headers'] = {}
+            kwargs['headers']['Authorization'] = f'Bearer {self.token}'
+        
+        # Make the request
+        response = self.session.request(method, url, **kwargs)
+        
+        # Handle 401 with token authentication
+        if response.status_code == 401 and self.enable_token_auth:
+            # Try to get a token
+            token = self._handle_auth_challenge(response, url)
+            
+            if token:
+                # Retry with token
+                if 'headers' not in kwargs:
+                    kwargs['headers'] = {}
+                kwargs['headers']['Authorization'] = f'Bearer {token}'
+                
+                response = self.session.request(method, url, **kwargs)
+        
+        return response
     
     def close(self) -> None:
         """Close the registry client session."""
