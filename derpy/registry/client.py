@@ -17,6 +17,7 @@ from derpy.core.exceptions import (
     RegistryAuthenticationError,
     ImagePushError
 )
+from derpy.core.logging import get_logger
 
 
 class RegistryClient:
@@ -51,6 +52,9 @@ class RegistryClient:
         # Normalize registry URL
         self.registry_url = self._normalize_url(registry_config.url)
         self.base_url = f"{self.registry_url}/{self.API_VERSION}"
+        
+        # Setup logging
+        self.logger = get_logger("registry")
         
         # Setup authentication
         self.auth: Optional[HTTPBasicAuth] = None
@@ -602,17 +606,20 @@ class RegistryClient:
         self,
         repository: str,
         tag: str,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
+        platform: Optional[str] = None
     ) -> tuple[bytes, bytes, list[tuple[str, bytes]]]:
         """Download complete image (manifest + config + all layers).
         
         Downloads all components of an image from the registry. This is the
-        high-level method for pulling images.
+        high-level method for pulling images. Automatically handles manifest
+        lists by selecting the appropriate platform-specific manifest.
         
         Args:
             repository: Repository name (e.g., "library/ubuntu")
             tag: Image tag (e.g., "22.04")
             progress_callback: Optional callback for overall progress
+            platform: Platform string (e.g., "linux/amd64"). If None, uses current platform.
             
         Returns:
             Tuple of (manifest_bytes, config_bytes, [(layer_digest, layer_bytes), ...])
@@ -621,13 +628,78 @@ class RegistryClient:
             RegistryError: If pull fails
         """
         try:
+            import json
+            import platform as platform_module
+            
             # Download manifest
             manifest_bytes, media_type = self.download_manifest(repository, tag)
-            
-            # Parse manifest
-            from derpy.oci.models import Manifest
-            import json
             manifest_dict = json.loads(manifest_bytes.decode('utf-8'))
+            
+            # Check if this is a manifest list (multi-platform)
+            manifest_list_types = [
+                'application/vnd.docker.distribution.manifest.list.v2+json',
+                'application/vnd.oci.image.index.v1+json'
+            ]
+            
+            if media_type in manifest_list_types or manifest_dict.get('mediaType') in manifest_list_types:
+                # This is a manifest list - select platform-specific manifest
+                self.logger.debug(f"Received manifest list, selecting platform-specific manifest")
+                
+                # Determine target platform
+                if platform is None:
+                    # Use current platform
+                    os_name = platform_module.system().lower()
+                    machine = platform_module.machine().lower()
+                    
+                    # Map machine architecture to Docker architecture names
+                    arch_map = {
+                        'x86_64': 'amd64',
+                        'amd64': 'amd64',
+                        'aarch64': 'arm64',
+                        'arm64': 'arm64',
+                        'armv7l': 'arm',
+                        'armv6l': 'arm',
+                    }
+                    arch = arch_map.get(machine, machine)
+                    platform = f"{os_name}/{arch}"
+                
+                # Parse platform string
+                platform_parts = platform.split('/')
+                target_os = platform_parts[0] if len(platform_parts) > 0 else 'linux'
+                target_arch = platform_parts[1] if len(platform_parts) > 1 else 'amd64'
+                target_variant = platform_parts[2] if len(platform_parts) > 2 else None
+                
+                # Find matching manifest in the list
+                manifests = manifest_dict.get('manifests', [])
+                selected_manifest = None
+                
+                for manifest_desc in manifests:
+                    platform_info = manifest_desc.get('platform', {})
+                    if (platform_info.get('os') == target_os and 
+                        platform_info.get('architecture') == target_arch):
+                        # Check variant if specified
+                        if target_variant:
+                            if platform_info.get('variant') == target_variant:
+                                selected_manifest = manifest_desc
+                                break
+                        else:
+                            selected_manifest = manifest_desc
+                            break
+                
+                if not selected_manifest:
+                    raise RegistryError(
+                        f"No manifest found for platform {platform} in manifest list. "
+                        f"Available platforms: {[m.get('platform') for m in manifests]}"
+                    )
+                
+                # Download the platform-specific manifest
+                manifest_digest = selected_manifest['digest']
+                self.logger.debug(f"Selected manifest for {platform}: {manifest_digest}")
+                manifest_bytes, media_type = self.download_manifest(repository, manifest_digest)
+                manifest_dict = json.loads(manifest_bytes.decode('utf-8'))
+            
+            # Parse manifest (now guaranteed to be a single-platform manifest)
+            from derpy.oci.models import Manifest
             manifest = Manifest.from_dict(manifest_dict)
             
             # Download config blob
