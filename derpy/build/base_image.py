@@ -574,7 +574,7 @@ class BaseImageManager:
         """Merge a layer directory into the target rootfs.
         
         Copies all files from layer_dir to target_dir, overwriting existing files
-        (overlay behavior).
+        (overlay behavior). Properly handles symlinks.
         
         Args:
             layer_dir: Source layer directory
@@ -585,18 +585,37 @@ class BaseImageManager:
             rel_dir = dirpath.relative_to(layer_dir)
             target_subdir = target_dir / rel_dir
             
-            # Create directory in target if it doesn't exist
-            target_subdir.mkdir(parents=True, exist_ok=True)
+            # Create directory in target if it doesn't exist (unless it's a symlink)
+            if not target_subdir.exists():
+                target_subdir.mkdir(parents=True, exist_ok=True)
             
             # Copy all files
             for filename in filenames:
                 src_file = dirpath / filename
                 dst_file = target_subdir / filename
                 
-                # Copy file, preserving metadata
-                shutil.copy2(src_file, dst_file)
+                # Handle symlinks specially
+                if src_file.is_symlink():
+                    link_target = src_file.readlink()
+                    # Remove existing file/symlink if present
+                    if dst_file.exists() or dst_file.is_symlink():
+                        if dst_file.is_dir() and not dst_file.is_symlink():
+                            shutil.rmtree(dst_file)
+                        else:
+                            dst_file.unlink()
+                    # Create symlink
+                    dst_file.symlink_to(link_target)
+                else:
+                    # Regular file - copy with metadata
+                    # Remove existing if it's a symlink or directory
+                    if dst_file.exists() or dst_file.is_symlink():
+                        if dst_file.is_dir() and not dst_file.is_symlink():
+                            shutil.rmtree(dst_file)
+                        elif dst_file.is_symlink():
+                            dst_file.unlink()
+                    shutil.copy2(src_file, dst_file)
             
-            # Handle symlinks
+            # Handle directory symlinks
             for dirname in dirnames:
                 src_dir = dirpath / dirname
                 dst_dir = target_subdir / dirname
@@ -604,6 +623,11 @@ class BaseImageManager:
                 # If source is a symlink, recreate it in target
                 if src_dir.is_symlink():
                     link_target = src_dir.readlink()
-                    if dst_dir.exists():
-                        dst_dir.unlink()
+                    # Remove existing if present
+                    if dst_dir.exists() or dst_dir.is_symlink():
+                        if dst_dir.is_dir() and not dst_dir.is_symlink():
+                            shutil.rmtree(dst_dir)
+                        else:
+                            dst_dir.unlink()
+                    # Create symlink
                     dst_dir.symlink_to(link_target)
