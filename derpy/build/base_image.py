@@ -433,9 +433,16 @@ class BaseImageManager:
                     try:
                         with tarfile.open(layer.content_path, 'r:gz') as tar:
                             # Extract all members
-                            # Use data filter for Python 3.12+ to avoid deprecation warning
-                            # This is safe for container layers as they are trusted content
-                            tar.extractall(path=temp_layer_dir, filter='data')
+                            # For Python 3.12+, we need to handle the filter parameter
+                            # Container layers may contain absolute symlinks which are rejected by 'data' filter
+                            # We use 'tar' filter which is less restrictive but still safe for our use case
+                            import sys
+                            if sys.version_info >= (3, 12):
+                                # Python 3.12+ - use 'tar' filter to allow absolute symlinks
+                                tar.extractall(path=temp_layer_dir, filter='tar')
+                            else:
+                                # Python < 3.12 - no filter parameter needed
+                                tar.extractall(path=temp_layer_dir)
                     except tarfile.TarError as tar_error:
                         raise BaseImageError(
                             image_ref="<unknown>",
