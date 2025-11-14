@@ -69,10 +69,17 @@ class LayerDiffManager:
         
         snapshot = Snapshot(timestamp=datetime.now())
         
+        # Directories to skip (virtual filesystems)
+        skip_dirs = {'proc', 'sys', 'dev'}
+        
         try:
             # Walk the directory tree
             for root, dirs, files in os.walk(rootfs, followlinks=False):
                 root_path = Path(root)
+                
+                # Skip virtual filesystem directories at root level
+                if root_path == rootfs:
+                    dirs[:] = [d for d in dirs if d not in skip_dirs]
                 
                 # Process directories
                 for dir_name in dirs:

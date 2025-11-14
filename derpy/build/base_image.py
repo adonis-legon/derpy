@@ -574,15 +574,24 @@ class BaseImageManager:
         """Merge a layer directory into the target rootfs.
         
         Copies all files from layer_dir to target_dir, overwriting existing files
-        (overlay behavior). Properly handles symlinks.
+        (overlay behavior). Properly handles symlinks and skips special directories.
         
         Args:
             layer_dir: Source layer directory
             target_dir: Target rootfs directory
         """
+        # Special directories to skip (virtual filesystems that shouldn't be copied)
+        skip_dirs = {'proc', 'sys', 'dev'}
+        
         # Walk through layer directory and copy all files
         for dirpath, dirnames, filenames in layer_dir.walk():
             rel_dir = dirpath.relative_to(layer_dir)
+            
+            # Skip special virtual filesystem directories at root level
+            if rel_dir == Path('.'):
+                # Remove skip_dirs from dirnames to prevent walking into them
+                dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+            
             target_subdir = target_dir / rel_dir
             
             # Create directory in target if it doesn't exist (unless it's a symlink)
@@ -594,40 +603,66 @@ class BaseImageManager:
                 src_file = dirpath / filename
                 dst_file = target_subdir / filename
                 
+                # Skip if source file doesn't exist (can happen with broken symlinks)
+                try:
+                    src_file.lstat()  # Use lstat to check without following symlinks
+                except (FileNotFoundError, OSError):
+                    self.logger.debug(f"Skipping non-existent file: {src_file}")
+                    continue
+                
                 # Handle symlinks specially
                 if src_file.is_symlink():
-                    link_target = src_file.readlink()
-                    # Remove existing file/symlink if present
-                    if dst_file.exists() or dst_file.is_symlink():
-                        if dst_file.is_dir() and not dst_file.is_symlink():
-                            shutil.rmtree(dst_file)
-                        else:
-                            dst_file.unlink()
-                    # Create symlink
-                    dst_file.symlink_to(link_target)
+                    try:
+                        link_target = src_file.readlink()
+                        # Remove existing file/symlink if present
+                        if dst_file.exists() or dst_file.is_symlink():
+                            if dst_file.is_dir() and not dst_file.is_symlink():
+                                shutil.rmtree(dst_file)
+                            else:
+                                dst_file.unlink()
+                        # Create symlink
+                        dst_file.symlink_to(link_target)
+                    except (OSError, FileNotFoundError) as e:
+                        self.logger.debug(f"Failed to copy symlink {src_file}: {e}")
+                        continue
                 else:
                     # Regular file - copy with metadata
-                    # Remove existing if it's a symlink or directory
-                    if dst_file.exists() or dst_file.is_symlink():
-                        if dst_file.is_dir() and not dst_file.is_symlink():
-                            shutil.rmtree(dst_file)
-                        elif dst_file.is_symlink():
-                            dst_file.unlink()
-                    shutil.copy2(src_file, dst_file)
+                    try:
+                        # Remove existing if it's a symlink or directory
+                        if dst_file.exists() or dst_file.is_symlink():
+                            if dst_file.is_dir() and not dst_file.is_symlink():
+                                shutil.rmtree(dst_file)
+                            elif dst_file.is_symlink():
+                                dst_file.unlink()
+                        shutil.copy2(src_file, dst_file)
+                    except (OSError, FileNotFoundError) as e:
+                        self.logger.debug(f"Failed to copy file {src_file}: {e}")
+                        continue
             
             # Handle directory symlinks
             for dirname in dirnames:
                 src_dir = dirpath / dirname
                 dst_dir = target_subdir / dirname
                 
+                # Skip if source doesn't exist
+                try:
+                    src_dir.lstat()
+                except (FileNotFoundError, OSError):
+                    self.logger.debug(f"Skipping non-existent directory: {src_dir}")
+                    continue
+                
                 # If source is a symlink, recreate it in target
                 if src_dir.is_symlink():
-                    link_target = src_dir.readlink()
-                    # Remove existing if present
-                    if dst_dir.exists() or dst_dir.is_symlink():
-                        if dst_dir.is_dir() and not dst_dir.is_symlink():
-                            shutil.rmtree(dst_dir)
-                        else:
-                            dst_dir.unlink()
-                    # Create symlink
-                    dst_dir.symlink_to(link_target)
+                    try:
+                        link_target = src_dir.readlink()
+                        # Remove existing if present
+                        if dst_dir.exists() or dst_dir.is_symlink():
+                            if dst_dir.is_dir() and not dst_dir.is_symlink():
+                                shutil.rmtree(dst_dir)
+                            else:
+                                dst_dir.unlink()
+                        # Create symlink
+                        dst_dir.symlink_to(link_target)
+                    except (OSError, FileNotFoundError) as e:
+                        self.logger.debug(f"Failed to copy directory symlink {src_dir}: {e}")
+                        continue
