@@ -4,6 +4,30 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 
 **Note**: While Derpy is independent of container runtimes, it does use minimal Python dependencies (like PyYAML) for configuration management.
 
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [Building Images](#building-images)
+  - [Listing Images](#listing-images)
+  - [Pushing Images](#pushing-images)
+  - [Configuration Management](#configuration-management)
+  - [Authentication](#authentication)
+  - [Verbose and Debug Output](#verbose-and-debug-output)
+  - [Getting Help](#getting-help)
+- [Requirements](#requirements)
+- [Development](#development)
+- [Supported Dockerfile Instructions](#supported-dockerfile-instructions-v010)
+- [Example Dockerfiles](#example-dockerfiles)
+- [Authentication Examples](#authentication-examples)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [Development Status](#development-status)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - **Dockerfile Support**: Parse and build from familiar Dockerfile syntax
@@ -223,6 +247,63 @@ Credentials are stored securely in `~/.derpy/auth.json` with the following chara
 - Only the file owner can read or write credentials
 - Derpy warns if incorrect permissions are detected and automatically fixes them
 - For maximum security, use `derpy logout` when credentials are no longer needed
+
+### Verbose and Debug Output
+
+Derpy supports verbose and debug logging to help you understand what's happening during builds and other operations.
+
+#### Verbose Mode
+
+Enable verbose output to see INFO level logs showing build progress, layer operations, and registry interactions:
+
+```bash
+# Build with verbose output
+derpy --verbose build . -f Dockerfile -t myapp:latest
+
+# Short form
+derpy -v build . -f Dockerfile -t myapp:latest
+
+# Works with any command
+derpy --verbose ls
+derpy --verbose push myapp:latest
+```
+
+Verbose output shows:
+
+- Build progress and instruction execution
+- Base image download and caching
+- Layer creation and merging
+- Registry authentication and uploads
+- File operations and snapshots
+
+#### Debug Mode
+
+Enable debug output for even more detailed logging, including DEBUG level messages:
+
+```bash
+# Build with debug output
+derpy --debug build . -f Dockerfile -t myapp:latest
+
+# Works with any command
+derpy --debug login
+derpy --debug push myapp:latest
+```
+
+Debug output includes everything from verbose mode plus:
+
+- Detailed HTTP requests and responses
+- File system operations
+- Token authentication flows
+- Tar archive operations
+- Snapshot comparisons
+
+**When to use verbose/debug**:
+
+- Troubleshooting build failures
+- Understanding why a build is slow
+- Debugging authentication issues
+- Investigating layer caching behavior
+- Reporting bugs (include debug output in bug reports)
 
 ### Getting Help
 
