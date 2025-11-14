@@ -35,14 +35,28 @@ class BannerGroup(click.Group):
     prog_name="derpy",
     message=f"Version: %(version)s\nAuthor: {__author__}"
 )
+@click.option(
+    '-v', '--verbose',
+    is_flag=True,
+    help='Enable verbose output (INFO level logging)'
+)
+@click.option(
+    '--debug',
+    is_flag=True,
+    help='Enable debug output (DEBUG level logging)'
+)
 @click.pass_context
-def cli(ctx):
+def cli(ctx, verbose: bool, debug: bool):
     """
     Build, manage, and distribute OCI-compliant container images
     without relying on existing container runtimes.
     """
     # Ensure context object exists
     ctx.ensure_object(dict)
+    
+    # Setup logging based on flags
+    from derpy.core.logging import setup_logging
+    setup_logging(verbose=verbose, debug=debug)
     
     # Initialize config manager
     ctx.obj['config_manager'] = ConfigManager()

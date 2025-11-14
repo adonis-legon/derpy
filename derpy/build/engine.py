@@ -445,7 +445,7 @@ class BuildEngine:
             image = Image(
                 manifest=manifest,
                 config=config,
-                layers=pipeline_result.layers
+                layers=all_layers
             )
         except Exception as e:
             raise BuildError(
