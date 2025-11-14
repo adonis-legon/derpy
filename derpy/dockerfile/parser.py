@@ -116,6 +116,8 @@ class DockerfileParser:
         """
         Extract instructions from Dockerfile content.
         
+        Handles multi-line instructions with backslash continuations.
+        
         Args:
             content: Raw Dockerfile content
             
@@ -125,16 +127,42 @@ class DockerfileParser:
         instructions: List[Instruction] = []
         lines = content.splitlines()
         
-        for line_num, line in enumerate(lines, start=1):
+        # Process lines, handling backslash continuations
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            line_num = i + 1
+            
             # Skip empty lines and comments
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
+                i += 1
                 continue
             
-            # Parse instruction
-            instruction = self._parse_line(line, line_num)
+            # Handle multi-line instructions (backslash continuation)
+            full_line = line
+            while full_line.rstrip().endswith('\\'):
+                # Remove trailing backslash and whitespace
+                full_line = full_line.rstrip()[:-1].rstrip()
+                i += 1
+                if i < len(lines):
+                    # Append next line with a space separator
+                    next_line = lines[i].strip()
+                    # Skip empty lines and comments in continuations
+                    while (not next_line or next_line.startswith('#')) and i < len(lines) - 1:
+                        i += 1
+                        next_line = lines[i].strip()
+                    if next_line and not next_line.startswith('#'):
+                        full_line += ' ' + next_line
+                else:
+                    break
+            
+            # Parse the complete instruction
+            instruction = self._parse_line(full_line, line_num)
             if instruction:
                 instructions.append(instruction)
+            
+            i += 1
         
         return instructions
     
@@ -177,6 +205,8 @@ class DockerfileParser:
         """
         Validate Dockerfile syntax and report errors.
         
+        Handles multi-line instructions with backslash continuations.
+        
         Args:
             content: Raw Dockerfile content
             
@@ -187,20 +217,46 @@ class DockerfileParser:
         lines = content.splitlines()
         has_from = False
         
-        for line_num, line in enumerate(lines, start=1):
+        # Process lines, handling backslash continuations (same logic as extract_instructions)
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            line_num = i + 1
+            
             # Skip empty lines and comments
             stripped = line.strip()
             if not stripped or stripped.startswith('#'):
+                i += 1
                 continue
             
-            # Parse instruction
-            instruction = self._parse_line(line, line_num)
+            # Handle multi-line instructions (backslash continuation)
+            full_line = line
+            original_line = line  # Keep original for error reporting
+            while full_line.rstrip().endswith('\\'):
+                # Remove trailing backslash and whitespace
+                full_line = full_line.rstrip()[:-1].rstrip()
+                i += 1
+                if i < len(lines):
+                    # Append next line with a space separator
+                    next_line = lines[i].strip()
+                    # Skip empty lines and comments in continuations
+                    while (not next_line or next_line.startswith('#')) and i < len(lines) - 1:
+                        i += 1
+                        next_line = lines[i].strip()
+                    if next_line and not next_line.startswith('#'):
+                        full_line += ' ' + next_line
+                else:
+                    break
+            
+            # Parse the complete instruction
+            instruction = self._parse_line(full_line, line_num)
             if not instruction:
                 errors.append(ValidationError(
                     line_number=line_num,
                     message="Invalid instruction format",
-                    raw_line=line
+                    raw_line=original_line
                 ))
+                i += 1
                 continue
             
             # Check for unsupported instructions
@@ -209,8 +265,9 @@ class DockerfileParser:
                     line_number=line_num,
                     message=f"Unsupported instruction: {instruction.raw_line.split()[0]}. "
                            f"Only FROM, RUN, and CMD are supported in v0.1.0",
-                    raw_line=line
+                    raw_line=original_line
                 ))
+                i += 1
                 continue
             
             # Validate FROM instruction
@@ -220,7 +277,7 @@ class DockerfileParser:
                     errors.append(ValidationError(
                         line_number=line_num,
                         message="FROM instruction requires a base image",
-                        raw_line=line
+                        raw_line=original_line
                     ))
             
             # Validate RUN instruction
@@ -229,7 +286,7 @@ class DockerfileParser:
                     errors.append(ValidationError(
                         line_number=line_num,
                         message="RUN instruction requires a command",
-                        raw_line=line
+                        raw_line=original_line
                     ))
             
             # Validate CMD instruction
@@ -238,8 +295,10 @@ class DockerfileParser:
                     errors.append(ValidationError(
                         line_number=line_num,
                         message="CMD instruction requires a command",
-                        raw_line=line
+                        raw_line=original_line
                     ))
+            
+            i += 1
         
         # Check if Dockerfile has at least one FROM instruction
         if not has_from and lines:
