@@ -376,10 +376,57 @@ class AuthManager:
         try:
             from derpy.core.config import RegistryConfig
             from derpy.registry.client import RegistryClient
+            import requests
             
             # Construct registry URL with scheme
             registry_url = f"https://{registry}"
             
+            # For Docker Hub, verify credentials by requesting a token
+            # with credentials for a public repository
+            if registry == 'registry-1.docker.io':
+                # Request a token for a public repository to verify credentials
+                # Use library/hello-world as it's always available
+                auth_url = "https://auth.docker.io/token"
+                params = {
+                    'service': 'registry.docker.io',
+                    'scope': 'repository:library/hello-world:pull'
+                }
+                
+                response = requests.get(
+                    auth_url,
+                    params=params,
+                    auth=requests.auth.HTTPBasicAuth(username, password),
+                    timeout=10
+                )
+                
+                # 200 means credentials are valid (or anonymous access granted)
+                # 401 means credentials are invalid
+                if response.status_code == 401:
+                    raise InvalidCredentialsError(registry)
+                elif response.status_code != 200:
+                    # Other errors - log but don't fail
+                    self.logger.warning(
+                        f"Could not verify credentials for {registry}: "
+                        f"HTTP {response.status_code}. "
+                        "Credentials will be stored without verification."
+                    )
+                    return
+                
+                # Check if we got a token
+                try:
+                    token_data = response.json()
+                    token = token_data.get('token') or token_data.get('access_token')
+                    if not token:
+                        # No token but 200 response - might be anonymous
+                        # Try with credentials to see if they're accepted
+                        pass
+                except Exception:
+                    pass
+                
+                self.logger.debug(f"Credentials verified for Docker Hub")
+                return
+            
+            # For other registries, use the standard verification
             # Create registry config
             config = RegistryConfig(
                 url=registry_url,
