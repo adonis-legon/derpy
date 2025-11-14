@@ -94,7 +94,7 @@ class BuildEngine:
         storage_manager: Optional[ImageManager] = None,
         enable_isolation: bool = True,
         base_image_cache_dir: Optional[Path] = None,
-        chroot_timeout: int = 300
+        chroot_timeout: int = 600
     ):
         """Initialize the build engine.
         

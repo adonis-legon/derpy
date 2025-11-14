@@ -38,7 +38,7 @@ class BuildSettings:
     parallel_builds: bool = False
     enable_isolation: bool = True
     base_image_cache_dir: str = "~/.derpy/cache/base-images"
-    chroot_timeout: int = 300
+    chroot_timeout: int = 600  # 10 minutes - enough for apt-get/apk operations
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for YAML serialization."""

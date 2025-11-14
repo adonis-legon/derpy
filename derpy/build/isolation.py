@@ -255,19 +255,100 @@ class IsolationExecutor:
                 command
             ]
             
-            result = subprocess.run(
-                chroot_cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
+            # Check if we should stream output (verbose/debug mode)
+            import logging
+            should_stream = self.logger.isEnabledFor(logging.INFO)
+            
+            if should_stream:
+                # Stream output in real-time for verbose/debug mode
+                import sys
+                
+                stdout_lines = []
+                stderr_lines = []
+                
+                process = subprocess.Popen(
+                    chroot_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1  # Line buffered
+                )
+                
+                # Use select to read from both stdout and stderr
+                import select
+                
+                # Set streams to non-blocking
+                import os
+                import fcntl
+                for stream in [process.stdout, process.stderr]:
+                    fd = stream.fileno()
+                    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+                
+                start = time.time()
+                while True:
+                    # Check timeout
+                    if time.time() - start > timeout:
+                        process.kill()
+                        process.wait()
+                        raise subprocess.TimeoutExpired(chroot_cmd, timeout)
+                    
+                    # Check if process has finished
+                    if process.poll() is not None:
+                        # Read any remaining output
+                        for line in process.stdout:
+                            stdout_lines.append(line)
+                            sys.stdout.write(line)
+                            sys.stdout.flush()
+                        for line in process.stderr:
+                            stderr_lines.append(line)
+                            sys.stderr.write(line)
+                            sys.stderr.flush()
+                        break
+                    
+                    # Wait for data with timeout
+                    readable, _, _ = select.select(
+                        [process.stdout, process.stderr], [], [], 0.1
+                    )
+                    
+                    for stream in readable:
+                        try:
+                            line = stream.readline()
+                            if line:
+                                if stream == process.stdout:
+                                    stdout_lines.append(line)
+                                    sys.stdout.write(line)
+                                    sys.stdout.flush()
+                                else:
+                                    stderr_lines.append(line)
+                                    sys.stderr.write(line)
+                                    sys.stderr.flush()
+                        except IOError:
+                            # No data available
+                            pass
+                
+                result_stdout = ''.join(stdout_lines)
+                result_stderr = ''.join(stderr_lines)
+                exit_code = process.returncode
+                
+            else:
+                # Non-streaming mode (quiet mode)
+                result = subprocess.run(
+                    chroot_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+                result_stdout = result.stdout
+                result_stderr = result.stderr
+                exit_code = result.returncode
             
             duration = time.time() - start_time
             
             execution_result = ExecutionResult(
-                exit_code=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr,
+                exit_code=exit_code,
+                stdout=result_stdout,
+                stderr=result_stderr,
                 duration=duration,
                 command=command
             )
@@ -278,7 +359,7 @@ class IsolationExecutor:
                 )
             else:
                 self.logger.warning(
-                    f"Command failed with exit code {result.returncode} "
+                    f"Command failed with exit code {exit_code} "
                     f"in {duration:.2f}s"
                 )
             

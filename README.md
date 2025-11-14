@@ -166,15 +166,15 @@ derpy config set build_settings.enable_isolation false
 # Set base image cache directory
 derpy config set build_settings.base_image_cache_dir /custom/cache/path
 
-# Set chroot command timeout (seconds)
-derpy config set build_settings.chroot_timeout 600
+# Set chroot command timeout (seconds) - increase for slow operations
+derpy config set build_settings.chroot_timeout 900
 ```
 
 Configuration options:
 
 - `enable_isolation`: Enable/disable build isolation (default: true on Linux, false elsewhere)
 - `base_image_cache_dir`: Directory for caching downloaded base images (default: ~/.derpy/cache/base-images)
-- `chroot_timeout`: Maximum time in seconds for RUN commands in chroot (default: 300)
+- `chroot_timeout`: Maximum time in seconds for RUN commands in chroot (default: 600)
 
 ### Authentication
 
