@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import json
+import shutil
 
 from derpy.oci.models import Image, Manifest, ImageConfig
 from derpy.oci.layout import OCILayoutManager
@@ -113,6 +114,7 @@ class ImageManager:
         self.repository_path = normalize_path(repository_path)
         self.metadata_path = self.repository_path / self.METADATA_FILE
         self.oci_layout = OCILayoutManager(self.repository_path)
+        self.blobs_path = self.repository_path / "blobs" / "sha256"
         
         # Initialize repository structure
         self._initialize_repository()
@@ -371,6 +373,79 @@ class ImageManager:
         metadata = self._get_image_metadata(tag)
         return metadata is not None
     
+    def remove_image(self, tag: str) -> bool:
+        """Remove a single image from local repository.
+        
+        Args:
+            tag: Image tag to remove
+        
+        Returns:
+            True if image was removed, False if not found
+        
+        Raises:
+            StorageError: If removal fails
+        """
+        try:
+            # Check if image exists using existing _get_image_metadata()
+            metadata = self._get_image_metadata(tag)
+            if metadata is None:
+                return False
+            
+            # Load metadata, remove image entry, save updated metadata
+            all_metadata = self._load_metadata()
+            del all_metadata[tag]
+            self._save_metadata(all_metadata)
+            
+            # Call oci_layout.remove_manifest_from_index(tag)
+            self.oci_layout.remove_manifest_from_index(tag)
+            
+            # Note: We don't delete blobs here as they might be shared
+            # Use cleanup_orphaned_blobs() to remove unused blobs
+            
+            return True
+            
+        except StorageError:
+            raise
+        except Exception as e:
+            raise StorageError(f"Failed to remove image '{tag}': {e}")
+    
+    def remove_all_images(self) -> int:
+        """Remove all images from local repository.
+        
+        Returns:
+            Number of images removed
+        
+        Raises:
+            StorageError: If removal fails
+        """
+        try:
+            # Load current metadata to count images
+            all_metadata = self._load_metadata()
+            image_count = len(all_metadata)
+            
+            # Clear metadata by saving empty dictionary
+            self._save_metadata({})
+            
+            # Recreate OCI layout to clear index and blobs
+            # First, remove the blobs directory
+            if self.blobs_path.exists():
+                shutil.rmtree(self.blobs_path)
+            
+            # Recreate the layout structure
+            self.oci_layout.create_layout()
+            
+            # Explicitly clear the index by saving an empty index
+            from derpy.oci.models import Index
+            empty_index = Index()
+            self.oci_layout.save_index(empty_index)
+            
+            return image_count
+            
+        except StorageError:
+            raise
+        except Exception as e:
+            raise StorageError(f"Failed to remove all images: {e}")
+    
     def delete_image(self, tag: str) -> bool:
         """Delete an image from the local repository.
         
@@ -438,6 +513,64 @@ class ImageManager:
             
         except Exception as e:
             raise StorageError(f"Failed to calculate repository size: {e}")
+    
+    def calculate_storage_size(self) -> int:
+        """Calculate total size of image storage.
+        
+        Recursively iterates through repository_path and sums file sizes.
+        Handles cases where repository doesn't exist.
+        
+        Returns:
+            Total size in bytes
+        
+        Raises:
+            StorageError: If calculation fails
+        """
+        try:
+            # Return 0 if repository doesn't exist
+            if not self.repository_path.exists():
+                return 0
+            
+            total_size = 0
+            
+            # Recursively iterate through all files in repository
+            for file_path in self.repository_path.rglob('*'):
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+            
+            return total_size
+            
+        except Exception as e:
+            raise StorageError(f"Failed to calculate storage size: {e}")
+    
+    def get_cache_size(self, cache_dir: Path) -> int:
+        """Calculate size of base image cache directory.
+        
+        Args:
+            cache_dir: Path to base image cache directory
+        
+        Returns:
+            Total cache size in bytes
+        
+        Raises:
+            StorageError: If calculation fails
+        """
+        try:
+            # Return 0 if cache directory doesn't exist
+            if not cache_dir.exists():
+                return 0
+            
+            total_size = 0
+            
+            # Recursively iterate through all files in cache directory
+            for file_path in cache_dir.rglob('*'):
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+            
+            return total_size
+            
+        except Exception as e:
+            raise StorageError(f"Failed to calculate cache size: {e}")
     
     def prepare_image_for_push(self, tag: str) -> tuple[bytes, bytes, list[tuple[str, bytes]]]:
         """Prepare image data for pushing to a registry.

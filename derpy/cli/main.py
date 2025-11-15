@@ -5,6 +5,7 @@ Main CLI entry point for derpy container tool.
 import click
 import getpass
 import sys
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,22 @@ from derpy.build import BuildEngine, BuildContext, BuildError
 from derpy.storage import ImageManager, StorageError
 from derpy.registry import RegistryClient, RegistryError
 from derpy.core.exceptions import RegistryAuthenticationError
+
+
+def format_size(size_bytes: int) -> str:
+    """Format size in human-readable format.
+    
+    Args:
+        size_bytes: Size in bytes
+        
+    Returns:
+        Human-readable size string (e.g., "45.2MB", "1.3GB")
+    """
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f}{unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f}TB"
 
 
 class BannerGroup(click.Group):
@@ -352,6 +369,146 @@ def list_images(ctx, format: str):
             click.echo(f"Total: {len(images)} image(s)")
             
     except StorageError as e:
+        click.echo(f"Storage error: {e}", err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(f"Unexpected error: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.argument('image')
+@click.pass_context
+def rm(ctx, image: str):
+    """
+    Remove a container image from local storage.
+    
+    IMAGE is the image tag to remove (e.g., myapp:latest).
+    
+    Examples:
+    
+      derpy rm myapp:latest
+      
+      derpy rm nginx:alpine
+    """
+    try:
+        click.echo(f"Removing image '{image}'...")
+        
+        # Create ImageManager instance
+        image_manager = ImageManager()
+        
+        # Calculate size before removal for reporting
+        metadata = image_manager._get_image_metadata(image)
+        freed_size = metadata.size if metadata else 0
+        
+        # Call remove_image(tag) and check return value
+        removed = image_manager.remove_image(image)
+        
+        if removed:
+            # Display success message with freed space on success
+            click.echo(f"✓ Successfully removed image: {image}")
+            if freed_size > 0:
+                # Format size in human-readable format
+                size_str = format_size(freed_size)
+                click.echo(f"  Freed: {size_str}")
+        else:
+            # Display error message with suggestion to run `derpy ls` if not found
+            click.echo(f"Error: Image '{image}' not found in local repository.", err=True)
+            click.echo()
+            click.echo("List available images with: derpy ls")
+            ctx.exit(1)
+            
+    except StorageError as e:
+        # Handle StorageError exceptions and display error messages
+        click.echo(f"Storage error: {e}", err=True)
+        ctx.exit(1)
+    except Exception as e:
+        click.echo(f"Unexpected error: {e}", err=True)
+        ctx.exit(1)
+
+
+@cli.command()
+@click.option(
+    '-f', '--force',
+    is_flag=True,
+    help='Skip confirmation prompt'
+)
+@click.pass_context
+def purge(ctx, force: bool):
+    """
+    Remove all container images and cached data.
+    
+    This command removes all images from local storage and clears
+    the base image cache. Use with caution as this operation cannot
+    be undone.
+    
+    Examples:
+    
+      derpy purge
+      
+      derpy purge --force
+    """
+    try:
+        # Create ImageManager instance
+        image_manager = ImageManager()
+        
+        # Load configuration to get cache directory
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        cache_dir = Path(config.build_settings.base_image_cache_dir).expanduser()
+        
+        # Calculate storage size and cache size before removal
+        storage_size = image_manager.calculate_storage_size()
+        cache_size = image_manager.get_cache_size(cache_dir)
+        total_size = storage_size + cache_size
+        
+        # Count images from metadata
+        all_metadata = image_manager._load_metadata()
+        image_count = len(all_metadata)
+        
+        # Check if there are no images
+        if image_count == 0 and cache_size == 0:
+            click.echo("No images found in local repository.")
+            click.echo("Nothing to purge.")
+            return
+        
+        # Display warning with size information unless --force is specified
+        if not force:
+            click.echo("WARNING: This will remove all images and cached data.")
+            click.echo()
+            click.echo(f"Images: {image_count}")
+            click.echo(f"Storage: {format_size(storage_size)}")
+            click.echo(f"Cache: {format_size(cache_size)}")
+            click.echo(f"Total: {format_size(total_size)}")
+            click.echo()
+            
+            # Prompt user for confirmation
+            response = click.prompt("Are you sure you want to continue? [y/N]", type=str, default="N")
+            
+            # Handle user cancellation (exit with code 0)
+            if response.lower() not in ('y', 'yes'):
+                click.echo("Operation cancelled.")
+                return
+        
+        # Call remove_all_images() if confirmed
+        click.echo("Removing all images...")
+        removed_count = image_manager.remove_all_images()
+        
+        # Clear base image cache directory using shutil.rmtree
+        if cache_dir.exists():
+            click.echo("Clearing base image cache...")
+            shutil.rmtree(cache_dir)
+            # Recreate the cache directory
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Display summary with images removed and space freed
+        click.echo()
+        click.echo("✓ Successfully purged all images")
+        click.echo(f"  Images removed: {removed_count}")
+        click.echo(f"  Space freed: {format_size(total_size)}")
+        
+    except StorageError as e:
+        # Handle StorageError exceptions and display error messages
         click.echo(f"Storage error: {e}", err=True)
         ctx.exit(1)
     except Exception as e:

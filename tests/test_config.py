@@ -88,7 +88,7 @@ class TestBuildSettings:
         assert settings.parallel_builds is False
         assert settings.enable_isolation is True
         assert settings.base_image_cache_dir == "~/.derpy/cache/base-images"
-        assert settings.chroot_timeout == 300
+        assert settings.chroot_timeout == 600
     
     def test_build_settings_custom(self):
         """Test creating custom build settings."""

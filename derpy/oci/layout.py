@@ -315,6 +315,49 @@ class OCILayoutManager:
                     return manifest
         return None
     
+    def remove_manifest_from_index(self, tag: str) -> bool:
+        """Remove a manifest reference from the OCI index.
+        
+        Args:
+            tag: Image tag to remove from index
+        
+        Returns:
+            True if removed, False if not found
+        
+        Raises:
+            StorageError: If index update fails
+        """
+        # Load current index
+        index = self.load_index()
+        if index is None:
+            return False
+        
+        # Find and filter out manifest entries matching the tag
+        original_count = len(index.manifests)
+        filtered_manifests = []
+        
+        for manifest in index.manifests:
+            if manifest.annotations:
+                ref_name = manifest.annotations.get("org.opencontainers.image.ref.name")
+                if ref_name == tag:
+                    # Skip this manifest (remove it)
+                    continue
+            filtered_manifests.append(manifest)
+        
+        # Check if any manifest was removed
+        if len(filtered_manifests) == original_count:
+            return False
+        
+        # Update index with filtered manifests
+        index.manifests = filtered_manifests
+        
+        try:
+            self.save_index(index)
+            return True
+        except Exception as e:
+            from derpy.core.exceptions import StorageError
+            raise StorageError(f"Failed to update index after removing manifest: {e}")
+    
     def delete_blob(self, digest: str) -> bool:
         """Delete a blob from storage.
         

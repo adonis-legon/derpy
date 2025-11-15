@@ -7,19 +7,20 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 ## Table of Contents
 
 - [Features](#features)
+- [Requirements](#requirements)
+- [Supported Dockerfile Instructions](#supported-dockerfile-instructions-v010)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
-  - [Building Images](#building-images)
-  - [Listing Images](#listing-images)
-  - [Pushing Images](#pushing-images)
   - [Configuration Management](#configuration-management)
   - [Authentication](#authentication)
+  - [Building Images](#building-images)
+  - [Listing Images](#listing-images)
+  - [Removing Images](#removing-images)
+  - [Pushing Images](#pushing-images)
   - [Verbose and Debug Output](#verbose-and-debug-output)
   - [Getting Help](#getting-help)
-- [Requirements](#requirements)
 - [Development](#development)
-- [Supported Dockerfile Instructions](#supported-dockerfile-instructions-v010)
 - [Example Dockerfiles](#example-dockerfiles)
 - [Authentication Examples](#authentication-examples)
 - [Troubleshooting](#troubleshooting)
@@ -40,6 +41,30 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 - **Runtime Independent**: No dependency on Docker, Podman, containerd, or other container runtimes
 - **Minimal Dependencies**: Uses only essential Python packages
 
+## Requirements
+
+- Python 3.8 or higher
+- No Docker, Podman, or containerd installation required
+
+### For Build Isolation (Real-World Container Builds)
+
+Build isolation enables building images that depend on base image filesystems and package managers (apt, apk, yum, etc.):
+
+- **Linux**: Full support with root privileges (`sudo`) or CAP_SYS_CHROOT capability
+- **macOS/Windows**: Not supported; builds automatically fall back to v0.1.0 behavior
+
+Without isolation, only simple RUN commands that don't depend on base image filesystems will work (e.g., `echo`, basic shell commands).
+
+## Supported Dockerfile Instructions (v0.1.0)
+
+Derpy v0.1.0 supports a subset of Dockerfile instructions:
+
+- `FROM`: Specify base image
+- `RUN`: Execute commands during build
+- `CMD`: Set default command for container
+
+Additional instructions will be added in future releases.
+
 ## Installation
 
 ```bash
@@ -58,86 +83,17 @@ derpy build . -f Dockerfile -t myapp:latest
 # List local images
 derpy ls
 
+# Remove an image
+derpy rm myapp:latest
+
+# Remove all images
+derpy purge --force
+
 # Push to registry
 derpy push myapp:latest
 ```
 
 ## Usage
-
-### Building Images
-
-Build a container image from a Dockerfile:
-
-```bash
-derpy build [CONTEXT] -f [DOCKERFILE] -t [TAG]
-```
-
-Options:
-
-- `CONTEXT`: Build context directory (default: current directory)
-- `-f, --file`: Path to Dockerfile (default: ./Dockerfile)
-- `-t, --tag`: Name and optionally a tag in 'name:tag' format
-
-Example:
-
-```bash
-derpy build . -f Dockerfile -t myapp:v1.0
-```
-
-#### Build Isolation (Linux Only)
-
-On Linux systems, Derpy automatically enables build isolation, which:
-
-- Downloads and caches base images from OCI registries
-- Extracts base image layers into a temporary filesystem
-- Executes RUN commands in a chrooted environment using the base image's tools
-- Captures filesystem changes as proper OCI layers
-- Combines base and new layers into the final image
-
-**Important**: Build isolation requires root privileges. Use `sudo` when building images that depend on base image filesystems:
-
-```bash
-# Build Ubuntu image with apt-get (requires sudo)
-sudo derpy build . -f Dockerfile -t ubuntu-app:latest
-
-# Build Alpine image with apk (requires sudo)
-sudo derpy build . -f Dockerfile -t alpine-app:latest
-
-# Build nginx with custom content (requires sudo)
-sudo derpy build examples/nginx-web -f examples/nginx-web/Dockerfile -t nginx-web:latest
-```
-
-**Without sudo**: Derpy detects insufficient permissions and automatically falls back to v0.1.0 behavior (commands execute on the host system). This works for simple commands but fails for operations requiring base image filesystems.
-
-On macOS and Windows, isolation is automatically disabled and builds use the v0.1.0 behavior (commands execute on the host system).
-
-### Listing Images
-
-View all locally stored images:
-
-```bash
-derpy ls
-```
-
-This displays:
-
-- Image names and tags
-- Creation dates
-- Image sizes
-
-### Pushing Images
-
-Upload an image to a remote registry:
-
-```bash
-derpy push [IMAGE:TAG]
-```
-
-Example:
-
-```bash
-derpy push myapp:v1.0
-```
 
 ### Configuration Management
 
@@ -248,6 +204,128 @@ Credentials are stored securely in `~/.derpy/auth.json` with the following chara
 - Derpy warns if incorrect permissions are detected and automatically fixes them
 - For maximum security, use `derpy logout` when credentials are no longer needed
 
+### Building Images
+
+Build a container image from a Dockerfile:
+
+```bash
+derpy build [CONTEXT] -f [DOCKERFILE] -t [TAG]
+```
+
+Options:
+
+- `CONTEXT`: Build context directory (default: current directory)
+- `-f, --file`: Path to Dockerfile (default: ./Dockerfile)
+- `-t, --tag`: Name and optionally a tag in 'name:tag' format
+
+Example:
+
+```bash
+derpy build . -f Dockerfile -t myapp:v1.0
+```
+
+#### Build Isolation (Linux Only)
+
+On Linux systems, Derpy automatically enables build isolation, which:
+
+- Downloads and caches base images from OCI registries
+- Extracts base image layers into a temporary filesystem
+- Executes RUN commands in a chrooted environment using the base image's tools
+- Captures filesystem changes as proper OCI layers
+- Combines base and new layers into the final image
+
+**Important**: Build isolation requires root privileges. Use `sudo` when building images that depend on base image filesystems:
+
+```bash
+# Build Ubuntu image with apt-get (requires sudo)
+sudo derpy build . -f Dockerfile -t ubuntu-app:latest
+
+# Build Alpine image with apk (requires sudo)
+sudo derpy build . -f Dockerfile -t alpine-app:latest
+
+# Build nginx with custom content (requires sudo)
+sudo derpy build examples/nginx-web -f examples/nginx-web/Dockerfile -t nginx-web:latest
+```
+
+**Without sudo**: Derpy detects insufficient permissions and automatically falls back to v0.1.0 behavior (commands execute on the host system). This works for simple commands but fails for operations requiring base image filesystems.
+
+On macOS and Windows, isolation is automatically disabled and builds use the v0.1.0 behavior (commands execute on the host system).
+
+### Listing Images
+
+View all locally stored images:
+
+```bash
+derpy ls
+```
+
+This displays:
+
+- Image names and tags
+- Creation dates
+- Image sizes
+
+### Removing Images
+
+Remove images from local storage to free up disk space.
+
+#### Remove a Single Image
+
+Remove a specific image by tag:
+
+```bash
+derpy rm [IMAGE:TAG]
+```
+
+Example:
+
+```bash
+derpy rm myapp:v1.0
+```
+
+This will:
+
+- Remove the image from local storage
+- Display the amount of disk space freed
+- Show an error if the image doesn't exist
+
+#### Remove All Images
+
+Remove all images and cached data:
+
+```bash
+derpy purge
+```
+
+This command will:
+
+- Display a warning with the total number of images and disk space to be freed
+- Prompt for confirmation before proceeding
+- Remove all images from local storage
+- Clear the base image cache directory
+
+To skip the confirmation prompt, use the `--force` flag:
+
+```bash
+derpy purge --force
+```
+
+**Warning**: The purge operation cannot be undone. Make sure you have pushed any important images to a registry before purging.
+
+### Pushing Images
+
+Upload an image to a remote registry:
+
+```bash
+derpy push [IMAGE:TAG]
+```
+
+Example:
+
+```bash
+derpy push myapp:v1.0
+```
+
 ### Verbose and Debug Output
 
 Derpy supports verbose and debug logging to help you understand what's happening during builds and other operations.
@@ -315,20 +393,6 @@ derpy build --help
 derpy push --help
 ```
 
-## Requirements
-
-- Python 3.8 or higher
-- No Docker, Podman, or containerd installation required
-
-### For Build Isolation (Real-World Container Builds)
-
-Build isolation enables building images that depend on base image filesystems and package managers (apt, apk, yum, etc.):
-
-- **Linux**: Full support with root privileges (`sudo`) or CAP_SYS_CHROOT capability
-- **macOS/Windows**: Not supported; builds automatically fall back to v0.1.0 behavior
-
-Without isolation, only simple RUN commands that don't depend on base image filesystems will work (e.g., `echo`, basic shell commands).
-
 ## Development
 
 ### Setting Up Development Environment
@@ -378,16 +442,6 @@ When you're done developing:
 ```bash
 deactivate
 ```
-
-## Supported Dockerfile Instructions (v0.1.0)
-
-Derpy v0.1.0 supports a subset of Dockerfile instructions:
-
-- `FROM`: Specify base image
-- `RUN`: Execute commands during build
-- `CMD`: Set default command for container
-
-Additional instructions will be added in future releases.
 
 ## Example Dockerfiles
 
