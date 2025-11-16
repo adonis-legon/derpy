@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 import tarfile
 import gzip
 import shutil
+import os
 from datetime import datetime
 
 from derpy.build.models import ImageReference
@@ -532,7 +533,8 @@ class BaseImageManager:
             layer_dir: Layer directory containing whiteout markers
         """
         # Walk through layer directory looking for whiteout files
-        for dirpath, dirnames, filenames in layer_dir.walk():
+        for dirpath, dirnames, filenames in os.walk(layer_dir):
+            dirpath = Path(dirpath)
             rel_dir = dirpath.relative_to(layer_dir)
             
             for filename in filenames:
@@ -584,7 +586,8 @@ class BaseImageManager:
         skip_dirs = {'proc', 'sys', 'dev'}
         
         # Walk through layer directory and copy all files
-        for dirpath, dirnames, filenames in layer_dir.walk():
+        for dirpath, dirnames, filenames in os.walk(layer_dir):
+            dirpath = Path(dirpath)
             rel_dir = dirpath.relative_to(layer_dir)
             
             # Skip special virtual filesystem directories at root level
