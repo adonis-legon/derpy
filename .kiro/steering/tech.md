@@ -1,6 +1,6 @@
 ## Tech Stack
 
-- Python 3.10+ (supports 3.10, 3.11, 3.12)
+- Python 3.10+ (supports 3.10, 3.11, 3.12, 3.13)
 - Build system: setuptools with pyproject.toml
 - CLI framework: click 8.0+
 - Configuration: PyYAML 6.0+

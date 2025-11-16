@@ -5,7 +5,7 @@
 # Python package to PyPI. It runs only when code is pushed/merged to main.
 #
 # Workflow Stages:
-# 1. Test: Run pytest across Python 3.10-3.12
+# 1. Test: Run pytest across Python 3.10-3.13
 # 2. Build: Create wheel and source distribution
 # 3. Publish: Upload package to PyPI
 #
@@ -32,7 +32,7 @@ jobs:
   # ===========================================================================
   # Purpose: Validate code quality across multiple Python versions
   # Runs on: Push to main branch
-  # Strategy: Matrix testing across Python 3.10, 3.11, 3.12
+  # Strategy: Matrix testing across Python 3.10, 3.11, 3.12, 3.13
   # Exit Criteria: All tests must pass for all Python versions
   # ===========================================================================
   test:
@@ -42,7 +42,7 @@ jobs:
     strategy:
       matrix:
         # Test across all supported Python versions to ensure compatibility
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
       # Step 1: Checkout repository code
