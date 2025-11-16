@@ -7,7 +7,7 @@ including path handling, directory permissions, and file operations.
 import os
 import stat
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 import platform
 
 
@@ -25,7 +25,7 @@ def get_platform_info() -> dict:
     }
 
 
-def normalize_path(path: str | Path, resolve_symlinks: bool = False) -> Path:
+def normalize_path(path: Union[str, Path], resolve_symlinks: bool = False) -> Path:
     """Normalize a path for the current platform.
     
     Handles:
@@ -326,7 +326,7 @@ def get_path_separator() -> str:
     return os.sep
 
 
-def join_paths(*parts: str | Path) -> Path:
+def join_paths(*parts: Union[str, Path]) -> Path:
     """Join path components in a platform-appropriate way.
     
     Args:
