@@ -341,9 +341,13 @@ derpy --verbose build . -f Dockerfile -t myapp:latest
 # Short form
 derpy -v build . -f Dockerfile -t myapp:latest
 
+# Push with verbose output (recommended for troubleshooting uploads)
+derpy -v push myapp:latest
+derpy -v push registry.example.com/myapp:v1.0
+
 # Works with any command
 derpy --verbose ls
-derpy --verbose push myapp:latest
+derpy --verbose login
 ```
 
 Verbose output shows:
@@ -352,7 +356,10 @@ Verbose output shows:
 - Base image download and caching
 - Layer creation and merging
 - Registry authentication and uploads
+- **Push operations**: Layer-by-layer upload progress with sizes, blob deduplication, and upload status
 - File operations and snapshots
+
+**Recommended for push operations**: Use verbose mode when pushing images to see detailed upload progress, identify which layers are being uploaded, and troubleshoot timeout or network issues.
 
 #### Debug Mode
 
@@ -674,6 +681,57 @@ derpy config set images_path ~/custom/derpy/images
 2. Check network connectivity
 3. Ensure you have proper credentials configured
 4. Verify the image exists locally: `derpy ls`
+
+### Push Timeout Errors
+
+**Problem**: Push fails with "timeout" or "write operation timed out" error.
+
+**Solution**: This typically occurs when uploading large layers over slow network connections.
+
+1. **Use verbose mode** to see which layer is timing out:
+
+```bash
+derpy -v push registry.example.com/myapp:latest
+```
+
+2. **Check your network connection**: Large layers (>50MB) may take several minutes to upload
+
+3. **Retry the push**: Derpy automatically skips layers that were already uploaded successfully
+
+4. **Increase timeout** (if needed): The default blob upload timeout is 600 seconds (10 minutes). For very large layers or slow connections, you may need to modify the timeout in the code.
+
+5. **Split large layers**: Consider optimizing your Dockerfile to create smaller layers:
+
+```dockerfile
+# Instead of one large RUN command
+RUN apt-get update && apt-get install -y package1 package2 package3 ...
+
+# Split into multiple RUN commands (creates separate layers)
+RUN apt-get update
+RUN apt-get install -y package1 package2
+RUN apt-get install -y package3
+```
+
+6. **Check registry limits**: Some registries have size limits or rate limits for uploads
+
+**Example with verbose output**:
+
+```bash
+$ derpy -v push 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp:latest
+
+INFO: Pushing image myapp:latest
+INFO: Total upload size: 57.00 MB
+INFO: Uploading config blob...
+INFO: Uploading blob sha256:abc123... (0.01 MB)
+INFO: Successfully uploaded blob sha256:abc123... (0.01 MB)
+INFO: Uploading 8 layer(s)...
+INFO: Uploading layer 1/8: sha256:def456...
+INFO: Uploading blob sha256:def456... (25.50 MB)
+INFO: Successfully uploaded blob sha256:def456... (25.50 MB)
+...
+```
+
+This helps identify which specific layer is causing the timeout.
 
 ### Unsupported Dockerfile Instruction
 
