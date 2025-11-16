@@ -291,13 +291,18 @@ class RegistryClient:
             RegistryError: If upload fails
         """
         try:
+            blob_size_mb = len(blob_data) / (1024 * 1024)
+            self.logger.info(f"Uploading blob {digest[:12]}... ({blob_size_mb:.2f} MB)")
+            
             # Check if blob already exists
             if self.blob_exists(repository, digest):
+                self.logger.info(f"Blob {digest[:12]}... already exists, skipping upload")
                 if progress_callback:
                     progress_callback(len(blob_data), len(blob_data))
                 return
             
             # Initiate upload
+            self.logger.debug(f"Initiating blob upload for {digest[:12]}...")
             upload_url = self._get_blob_upload_url(repository)
             response = self._request('POST', upload_url, timeout=30)
             
@@ -310,6 +315,8 @@ class RegistryClient:
             location = response.headers.get('Location')
             if not location:
                 raise RegistryError("Registry did not provide upload location")
+            
+            self.logger.debug(f"Upload location: {location}")
             
             # Make location absolute if it's relative
             if not location.startswith('http'):
@@ -327,12 +334,14 @@ class RegistryClient:
                 'Content-Length': str(len(blob_data))
             }
             
+            self.logger.debug(f"Uploading {blob_size_mb:.2f} MB to {upload_location[:100]}...")
+            
             response = self._request(
                 'PUT',
                 upload_location,
                 data=blob_data,
                 headers=headers,
-                timeout=300
+                timeout=600  # 10 minutes for large blob uploads
             )
             
             if response.status_code not in (201, 204):
@@ -340,15 +349,23 @@ class RegistryClient:
                     f"Failed to upload blob: {response.status_code} {response.text}"
                 )
             
+            self.logger.info(f"Successfully uploaded blob {digest[:12]}... ({blob_size_mb:.2f} MB)")
+            
             # Report progress
             if progress_callback:
                 progress_callback(len(blob_data), len(blob_data))
             
         except RegistryError:
             raise
-        except requests.exceptions.Timeout:
-            raise RegistryError("Blob upload timeout")
+        except requests.exceptions.Timeout as e:
+            self.logger.error(f"Blob upload timeout for {digest[:12]}... ({blob_size_mb:.2f} MB)")
+            raise RegistryError(
+                f"Blob upload timeout after 600 seconds. "
+                f"The blob size is {blob_size_mb:.2f} MB. "
+                f"This may be due to slow network connection or registry issues."
+            )
         except requests.exceptions.RequestException as e:
+            self.logger.error(f"Failed to upload blob {digest[:12]}...: {e}")
             raise RegistryError(f"Failed to upload blob: {e}")
     
     def upload_manifest(
@@ -435,13 +452,19 @@ class RegistryClient:
             # Parse image reference
             repository, tag = self._parse_image_reference(image_ref)
             
+            self.logger.info(f"Pushing image {repository}:{tag}")
+            
             # Calculate total size for progress tracking
             total_size = len(config_data) + sum(len(data) for _, data in layers_data)
             uploaded_size = 0
             
+            self.logger.info(f"Total upload size: {total_size / (1024 * 1024):.2f} MB")
+            
             # Upload config blob
             import hashlib
             config_digest = f"sha256:{hashlib.sha256(config_data).hexdigest()}"
+            
+            self.logger.info(f"Uploading config blob...")
             
             def config_progress(uploaded, total):
                 nonlocal uploaded_size
@@ -452,7 +475,10 @@ class RegistryClient:
             uploaded_size += len(config_data)
             
             # Upload layer blobs
-            for layer_digest, layer_data in layers_data:
+            self.logger.info(f"Uploading {len(layers_data)} layer(s)...")
+            for i, (layer_digest, layer_data) in enumerate(layers_data, 1):
+                self.logger.info(f"Uploading layer {i}/{len(layers_data)}: {layer_digest[:12]}...")
+                
                 def layer_progress(uploaded, total):
                     nonlocal uploaded_size
                     if progress_callback:
@@ -462,6 +488,7 @@ class RegistryClient:
                 uploaded_size += len(layer_data)
             
             # Upload manifest
+            self.logger.info(f"Uploading manifest...")
             from derpy.oci.models import MEDIA_TYPE_IMAGE_MANIFEST
             manifest_digest = self.upload_manifest(
                 repository,
@@ -469,6 +496,8 @@ class RegistryClient:
                 manifest_data,
                 MEDIA_TYPE_IMAGE_MANIFEST
             )
+            
+            self.logger.info(f"Successfully pushed image {repository}:{tag}")
             
             return {
                 'repository': repository,
