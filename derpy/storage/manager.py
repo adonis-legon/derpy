@@ -79,7 +79,9 @@ class ImageInfo:
         """String representation for display."""
         # Format size in human-readable format
         size_str = self._format_size(self.size)
-        return f"{self.tag:<40} {size_str:<10} {self.created:<25} {self.architecture}/{self.os}"
+        # Normalize created date to ISO format YYYY-MM-DDTHH:mm:ss
+        created_str = self._format_created(self.created)
+        return f"{self.tag:<40} {size_str:<10} {created_str:<19} {self.architecture}/{self.os}"
     
     @staticmethod
     def _format_size(size_bytes: int) -> str:
@@ -89,6 +91,25 @@ class ImageInfo:
                 return f"{size_bytes:.1f}{unit}"
             size_bytes /= 1024.0
         return f"{size_bytes:.1f}TB"
+    
+    @staticmethod
+    def _format_created(created: str) -> str:
+        """Format created timestamp to ISO format YYYY-MM-DDTHH:mm:ss.
+        
+        Args:
+            created: ISO timestamp string with varying precision
+            
+        Returns:
+            Normalized timestamp string in format YYYY-MM-DDTHH:mm:ss
+        """
+        try:
+            # Parse the ISO timestamp (handles various formats)
+            dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+            # Format to consistent ISO format without microseconds and timezone
+            return dt.strftime('%Y-%m-%dT%H:%M:%S')
+        except (ValueError, AttributeError):
+            # If parsing fails, return original truncated to 19 chars
+            return created[:19] if len(created) >= 19 else created
 
 
 class ImageManager:
