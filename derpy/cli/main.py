@@ -359,8 +359,8 @@ def list_images(ctx, format: str):
         else:
             # Output as table
             click.echo()
-            click.echo(f"{'TAG':<40} {'SIZE':<10} {'CREATED':<25} {'PLATFORM'}")
-            click.echo("-" * 90)
+            click.echo(f"{'TAG':<40} {'SIZE':<10} {'CREATED':<19} {'PLATFORM'}")
+            click.echo("-" * 84)
             
             for img in images:
                 click.echo(str(img))
