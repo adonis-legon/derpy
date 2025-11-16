@@ -43,7 +43,7 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 
 ## Requirements
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - No Docker, Podman, or containerd installation required
 
 ### For Build Isolation (Real-World Container Builds)
