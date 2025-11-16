@@ -781,15 +781,18 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
             insecure=insecure
         )
         
-        # Check if image exists locally
+        # Determine local image tag (repository without registry prefix)
+        local_tag = repository
+        
+        # Check if image exists locally using the local tag
         image_manager = ImageManager()
-        if not image_manager.image_exists(image):
-            click.echo(f"Error: Image '{image}' not found in local repository.", err=True)
+        if not image_manager.image_exists(local_tag):
+            click.echo(f"Error: Image '{local_tag}' not found in local repository.", err=True)
             click.echo()
             click.echo("List available images with: derpy ls")
             ctx.exit(1)
         
-        click.echo(f"Pushing image '{image}' to {normalized_registry}...")
+        click.echo(f"Pushing image '{local_tag}' to {normalized_registry}/{repository}...")
         click.echo()
         
         # Create registry client
@@ -814,9 +817,9 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
                 click.echo(f"  derpy login {registry_url}")
                 ctx.exit(1)
             
-            # Prepare image data
+            # Prepare image data using local tag
             click.echo("Preparing image data...")
-            manifest_bytes, config_bytes, layers_data = image_manager.prepare_image_for_push(image)
+            manifest_bytes, config_bytes, layers_data = image_manager.prepare_image_for_push(local_tag)
             
             # Calculate total size
             total_size = len(manifest_bytes) + len(config_bytes) + sum(
@@ -833,10 +836,10 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
                     last_progress[0] = progress
                     click.echo(f"  Uploading: {progress}% ({uploaded}/{total} bytes)")
             
-            # Push image
+            # Push image using the repository path (with registry)
             click.echo(f"Uploading image ({len(layers_data)} layer(s), {total_size} bytes total)...")
             result = client.push_image(
-                image,
+                repository,
                 manifest_bytes,
                 config_bytes,
                 layers_data,
@@ -844,7 +847,8 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
             )
             
             click.echo()
-            click.echo(f"✓ Successfully pushed image: {image}")
+            click.echo(f"✓ Successfully pushed image: {local_tag}")
+            click.echo(f"  Registry: {normalized_registry}")
             click.echo(f"  Repository: {result['repository']}")
             click.echo(f"  Tag: {result['tag']}")
             click.echo(f"  Manifest Digest: {result['manifest_digest']}")
