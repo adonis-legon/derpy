@@ -67,9 +67,13 @@ Additional instructions will be added in future releases.
 
 ## Installation
 
+Install from PyPI:
+
 ```bash
-pip install derpy
+pip install derpy-tool
 ```
+
+The package is named `derpy-tool` on PyPI, but the command-line tool is simply `derpy`.
 
 ## Quick Start
 
@@ -893,7 +897,7 @@ derpy config set images_path /your/custom/path
 
 ### Q: What Python version is required?
 
-**A**: Python 3.8 or higher is required.
+**A**: Python 3.10 or higher is required.
 
 ### Q: Can I use Derpy in CI/CD pipelines?
 
