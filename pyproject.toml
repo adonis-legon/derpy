@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "derpy-tool"
-version = "0.1.0"
+version = "0.1.1"
 description = "A simple container tool, made with AI, for building, managing, and distributing OCI-compliant container images"
 readme = "README.md"
 license = { text = "MIT" }
