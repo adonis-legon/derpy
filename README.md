@@ -11,6 +11,7 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 - [Supported Dockerfile Instructions](#supported-dockerfile-instructions-v010)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Daemon vs Direct Execution](#daemon-vs-direct-execution)
 - [Usage](#usage)
   - [Configuration Management](#configuration-management)
   - [Authentication](#authentication)
@@ -34,6 +35,7 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 - **Dockerfile Support**: Parse and build from familiar Dockerfile syntax
 - **OCI Compliance**: Generate fully compliant OCI container images
 - **Build Isolation**: Execute RUN commands in isolated chroot environments using base image filesystems (Linux only)
+- **Daemon Architecture**: Optional privileged daemon (derpyd) eliminates the need for sudo on every build command
 - **Base Image Support**: Automatically pull and cache base images from OCI registries
 - **Local Repository**: Manage images in a local repository
 - **Registry Integration**: Push images to OCI-compliant registries
@@ -81,7 +83,7 @@ The package is named `derpy-tool` on PyPI, but the command-line tool is simply `
 # Check version
 derpy --version
 
-# Build an image
+# Build an image (with daemon if available, otherwise requires sudo)
 derpy build . -f Dockerfile -t myapp:latest
 
 # List local images
@@ -96,6 +98,278 @@ derpy purge --force
 # Push to registry
 derpy push myapp:latest
 ```
+
+**Note**: If you have the daemon installed and are in the `derpy` group, builds run without sudo. Otherwise, use `sudo derpy build` for build isolation on Linux. See [Daemon vs Direct Execution](#daemon-vs-direct-execution) for details.
+
+## Daemon vs Direct Execution
+
+Derpy v0.2.0 introduces an optional daemon architecture that eliminates the need for sudo on every build command. This section explains how the daemon works, when it's used, and how to set it up.
+
+### Overview
+
+Derpy can operate in two modes:
+
+1. **Daemon Mode** (Recommended for Linux): The `derpyd` daemon runs as a privileged background service. Users in the `derpy` group can build images without sudo by communicating with the daemon via Unix socket.
+
+2. **Direct Execution Mode**: The CLI executes build operations directly, requiring sudo for build isolation on Linux. This is the fallback mode when the daemon is unavailable.
+
+### How the Daemon Works
+
+```
+┌─────────────────┐                    ┌──────────────────┐
+│   derpy build   │◄──────────────────►│     derpyd       │
+│  (unprivileged) │   Unix Socket      │  (privileged)    │
+│                 │  /var/run/derpy.   │                  │
+│                 │       sock          │                  │
+└─────────────────┘                    └──────────────────┘
+         │                                      │
+         │                                      │
+         ▼                                      ▼
+  User commands                        Build operations with
+  without sudo                         root privileges
+```
+
+**Key Benefits**:
+
+- No need to type `sudo` for every build command
+- Secure group-based access control
+- Concurrent builds from multiple users
+- Automatic fallback to direct execution if daemon unavailable
+- Full backward compatibility with existing workflows
+
+### When is the Daemon Used?
+
+The CLI automatically detects and uses the daemon when:
+
+1. The daemon is running (socket exists at `/var/run/derpy.sock`)
+2. The user is in the `derpy` group (has socket permissions)
+3. The socket is accessible
+
+**Automatic Fallback**: If the daemon is unavailable, the CLI automatically falls back to direct execution with a warning. This ensures existing workflows continue to work.
+
+### Setting Up the Daemon (Linux Only)
+
+The daemon is currently only supported on Linux systems with systemd.
+
+**Tested Distributions**:
+
+- Ubuntu 22.04 LTS
+- Debian 12 (Bookworm)
+- Fedora 39
+- Arch Linux (rolling)
+
+For distribution-specific installation notes and testing procedures, see the [Distribution Testing Guide](docs/distribution-testing.md).
+
+#### Prerequisites
+
+- Linux operating system with systemd
+- Python 3.10 or higher
+- Root access for installation
+
+#### Installation Steps
+
+1. **Install Derpy** (if not already installed):
+
+```bash
+pip install derpy-tool
+```
+
+2. **View setup instructions**:
+
+```bash
+derpy daemon setup-info
+```
+
+This command displays step-by-step instructions for downloading and installing the daemon.
+
+3. **Download the installation scripts**:
+
+```bash
+# Download the installation script
+curl -O https://raw.githubusercontent.com/adonis-legon/derpy/main/scripts/install-daemon.sh
+
+# Download the systemd service file
+mkdir -p systemd
+curl -o systemd/derpyd.service https://raw.githubusercontent.com/adonis-legon/derpy/main/scripts/systemd/derpyd.service
+
+# Make the script executable
+chmod +x install-daemon.sh
+```
+
+4. **Run the installation script**:
+
+```bash
+sudo bash install-daemon.sh
+```
+
+This script will:
+
+- Create the `derpy` system group
+- Install the `derpyd` daemon
+- Set up the systemd service
+- Start the daemon
+- Create the Unix socket at `/var/run/derpy.sock`
+
+5. **Add your user to the derpy group**:
+
+```bash
+sudo usermod -aG derpy $USER
+```
+
+6. **Log out and back in** for group membership to take effect:
+
+```bash
+# Check your groups
+groups
+# Should include 'derpy'
+```
+
+7. **Verify the daemon is running**:
+
+```bash
+# Check service status
+sudo systemctl status derpyd
+
+# Check socket exists
+ls -l /var/run/derpy.sock
+# Should show: srw-rw---- 1 root derpy ... /var/run/derpy.sock
+```
+
+#### Managing the Daemon
+
+```bash
+# Start the daemon
+sudo systemctl start derpyd
+
+# Stop the daemon
+sudo systemctl stop derpyd
+
+# Restart the daemon
+sudo systemctl restart derpyd
+
+# Check daemon status
+sudo systemctl status derpyd
+
+# View daemon logs
+sudo journalctl -u derpyd -f
+
+# Enable daemon to start on boot
+sudo systemctl enable derpyd
+
+# Disable daemon from starting on boot
+sudo systemctl disable derpyd
+```
+
+### Building with the Daemon
+
+Once the daemon is set up and you're in the `derpy` group, building is simple:
+
+```bash
+# Build without sudo - daemon handles privileges automatically
+derpy build . -f Dockerfile -t myapp:latest
+
+# The CLI automatically:
+# 1. Detects the daemon is available
+# 2. Sends the build request to the daemon
+# 3. Streams output back to you in real-time
+# 4. Displays the final result
+```
+
+**Output Example**:
+
+```bash
+$ derpy build . -f Dockerfile -t myapp:latest
+Building image myapp:latest...
+Step 1/3: FROM ubuntu:22.04
+Pulling base image ubuntu:22.04...
+Step 2/3: RUN apt-get update && apt-get install -y curl
+ ---> Running in isolated environment
+Get:1 http://archive.ubuntu.com/ubuntu jammy InRelease [270 kB]
+...
+Step 3/3: CMD ["/bin/bash"]
+Successfully built myapp:latest
+```
+
+### Fallback to Direct Execution
+
+If the daemon is not available, the CLI automatically falls back to direct execution:
+
+```bash
+$ derpy build . -f Dockerfile -t myapp:latest
+Warning: Daemon not available, falling back to direct execution
+This requires sudo privileges for build isolation.
+Error: Insufficient permissions for chroot. Run with sudo or install the daemon.
+```
+
+In this case, use sudo:
+
+```bash
+sudo derpy build . -f Dockerfile -t myapp:latest
+```
+
+### Daemon vs Direct Execution Comparison
+
+| Feature                | Daemon Mode      | Direct Execution |
+| ---------------------- | ---------------- | ---------------- |
+| **Requires sudo**      | No (after setup) | Yes (for builds) |
+| **Setup required**     | Yes (one-time)   | No               |
+| **Concurrent builds**  | Yes              | Yes              |
+| **Platform support**   | Linux only       | All platforms    |
+| **Automatic fallback** | N/A              | Yes              |
+| **Group membership**   | Required         | Not required     |
+
+### Group Membership Requirement
+
+To use the daemon, you must be in the `derpy` group. This provides secure access control to the daemon socket.
+
+**Check your group membership**:
+
+```bash
+groups
+# Should include 'derpy'
+```
+
+**Add yourself to the group** (requires sudo):
+
+```bash
+sudo usermod -aG derpy $USER
+```
+
+**Important**: You must log out and back in for group changes to take effect. Simply opening a new terminal is not sufficient.
+
+**Verify access**:
+
+```bash
+# Check socket permissions
+ls -l /var/run/derpy.sock
+# Should show: srw-rw---- 1 root derpy
+
+# Try building without sudo
+derpy build . -f Dockerfile -t test:latest
+```
+
+### Security Considerations
+
+The daemon architecture is designed with security in mind:
+
+- **Socket Permissions**: The Unix socket has 0660 permissions (owner: root, group: derpy)
+- **Group-Based Access**: Only users in the `derpy` group can connect
+- **Credential Validation**: The daemon verifies connecting user's group membership
+- **Request Validation**: All requests are validated before execution
+- **Input Sanitization**: User inputs are sanitized to prevent injection attacks
+- **Privilege Separation**: The daemon drops privileges for non-critical operations
+- **Audit Logging**: All operations are logged to the system journal
+
+**Best Practices**:
+
+- Only add trusted users to the `derpy` group
+- Regularly review group membership: `getent group derpy`
+- Monitor daemon logs for suspicious activity: `sudo journalctl -u derpyd`
+- Keep the daemon updated with security patches
+
+### Troubleshooting Daemon Issues
+
+See the [Troubleshooting](#troubleshooting) section for common daemon-related issues and solutions.
 
 ## Usage
 
@@ -238,7 +512,26 @@ On Linux systems, Derpy automatically enables build isolation, which:
 - Captures filesystem changes as proper OCI layers
 - Combines base and new layers into the final image
 
-**Important**: Build isolation requires root privileges. Use `sudo` when building images that depend on base image filesystems:
+#### With Daemon (Recommended)
+
+If you have the daemon installed and are in the `derpy` group, simply run:
+
+```bash
+# Build without sudo - daemon handles privileges
+derpy build . -f Dockerfile -t myapp:latest
+
+# Build Ubuntu image with apt-get
+derpy build . -f Dockerfile -t ubuntu-app:latest
+
+# Build Alpine image with apk
+derpy build . -f Dockerfile -t alpine-app:latest
+```
+
+The CLI automatically detects the daemon and uses it for privileged operations.
+
+#### Without Daemon (Direct Execution)
+
+If the daemon is not available, build isolation requires root privileges. Use `sudo`:
 
 ```bash
 # Build Ubuntu image with apt-get (requires sudo)
@@ -596,6 +889,216 @@ sudo derpy build . -f Dockerfile -t myapp:latest
 
 ## Troubleshooting
 
+### Daemon Issues
+
+#### "Daemon not available" Warning
+
+**Problem**: CLI displays "Warning: Daemon not available, falling back to direct execution"
+
+**Solution**: This means the daemon is not running or not accessible. Check:
+
+1. **Is the daemon installed?**
+
+```bash
+which derpyd
+# Should show: /usr/local/bin/derpyd or similar
+```
+
+2. **Is the daemon running?**
+
+```bash
+sudo systemctl status derpyd
+# Should show: active (running)
+```
+
+If not running, start it:
+
+```bash
+sudo systemctl start derpyd
+```
+
+3. **Does the socket exist?**
+
+```bash
+ls -l /var/run/derpy.sock
+# Should show: srw-rw---- 1 root derpy
+```
+
+4. **Are you in the derpy group?**
+
+```bash
+groups
+# Should include 'derpy'
+```
+
+If not, add yourself and log out/in:
+
+```bash
+sudo usermod -aG derpy $USER
+# Then log out and back in
+```
+
+#### "Permission denied" on Socket
+
+**Problem**: Cannot connect to daemon socket even though it exists.
+
+**Solution**: You need to be in the `derpy` group:
+
+```bash
+# Check your groups
+groups
+
+# Add yourself to derpy group
+sudo usermod -aG derpy $USER
+
+# IMPORTANT: Log out and back in for changes to take effect
+# Opening a new terminal is NOT sufficient
+```
+
+Verify after logging back in:
+
+```bash
+groups | grep derpy
+ls -l /var/run/derpy.sock
+```
+
+#### Daemon Won't Start
+
+**Problem**: `systemctl start derpyd` fails or daemon immediately stops.
+
+**Solution**: Check the daemon logs for errors:
+
+```bash
+# View recent logs
+sudo journalctl -u derpyd -n 50
+
+# Follow logs in real-time
+sudo journalctl -u derpyd -f
+```
+
+Common issues:
+
+1. **Port/socket already in use**: Another process is using `/var/run/derpy.sock`
+
+```bash
+# Check what's using the socket
+sudo lsof /var/run/derpy.sock
+
+# Remove stale socket file
+sudo rm /var/run/derpy.sock
+sudo systemctl start derpyd
+```
+
+2. **Python not found**: Ensure Python 3.10+ is installed
+
+```bash
+python3 --version
+which python3
+```
+
+3. **Derpy not installed**: Install derpy first
+
+```bash
+pip install derpy-tool
+```
+
+#### Daemon Connection Timeout
+
+**Problem**: Build hangs or times out when using daemon.
+
+**Solution**:
+
+1. **Check daemon is responsive**:
+
+```bash
+sudo systemctl status derpyd
+# Should show: active (running)
+```
+
+2. **Check daemon logs for errors**:
+
+```bash
+sudo journalctl -u derpyd -n 100
+```
+
+3. **Restart the daemon**:
+
+```bash
+sudo systemctl restart derpyd
+```
+
+4. **Try direct execution as fallback**:
+
+```bash
+sudo derpy build . -f Dockerfile -t myapp:latest
+```
+
+#### Build Works with Sudo but Not with Daemon
+
+**Problem**: `sudo derpy build` works but `derpy build` (with daemon) fails.
+
+**Solution**: This usually indicates a permission or configuration issue with the daemon:
+
+1. **Check daemon logs**:
+
+```bash
+sudo journalctl -u derpyd -n 50
+```
+
+2. **Verify daemon has access to required directories**:
+
+```bash
+# Check derpy directories
+ls -la ~/.derpy/
+ls -la ~/.derpy/cache/base-images/
+
+# Ensure daemon can access them
+sudo ls -la /root/.derpy/
+```
+
+3. **Check if daemon is using correct configuration**:
+
+```bash
+# Daemon uses root's config by default
+sudo derpy config show
+```
+
+4. **Try rebuilding with verbose output**:
+
+```bash
+derpy -v build . -f Dockerfile -t myapp:latest
+```
+
+#### Multiple Users Cannot Build Concurrently
+
+**Problem**: Second user's build fails when another user is building.
+
+**Solution**: This should work with the daemon. Check:
+
+1. **Both users are in derpy group**:
+
+```bash
+# As each user
+groups | grep derpy
+```
+
+2. **Daemon is configured for concurrent builds**:
+
+```bash
+# Check daemon logs for resource limits
+sudo journalctl -u derpyd | grep -i "concurrent\|limit\|queue"
+```
+
+3. **Sufficient system resources**:
+
+```bash
+# Check disk space
+df -h ~/.derpy
+
+# Check memory
+free -h
+```
+
 ### Build Isolation Issues
 
 #### "Platform not supported for isolation" Error
@@ -901,11 +1404,126 @@ derpy config set images_path /your/custom/path
 
 ### Q: Can I use Derpy in CI/CD pipelines?
 
-**A**: Yes! Derpy is designed to work in automated environments. Just ensure Python 3.8+ is available.
+**A**: Yes! Derpy is designed to work in automated environments. Just ensure Python 3.10+ is available.
 
 ### Q: How do I report bugs or request features?
 
 **A**: Please open an issue on the GitHub repository with details about the problem or feature request.
+
+### Daemon-Related FAQs
+
+### Q: Do I need to install the daemon?
+
+**A**: No, the daemon is optional. Derpy works without it, but you'll need to use `sudo` for builds on Linux. The daemon eliminates the need for sudo by running as a privileged background service.
+
+### Q: What's the difference between daemon mode and direct execution?
+
+**A**:
+
+- **Daemon mode**: The CLI communicates with a privileged background service (derpyd) via Unix socket. No sudo needed for builds if you're in the `derpy` group.
+- **Direct execution**: The CLI runs build operations directly, requiring sudo for build isolation on Linux.
+
+The CLI automatically uses the daemon if available and falls back to direct execution otherwise.
+
+### Q: Is the daemon required for building images?
+
+**A**: No. The daemon is optional and only available on Linux. Without it, you can still build images using `sudo derpy build` on Linux, or without sudo on macOS/Windows (with limited functionality).
+
+### Q: How do I know if I'm using the daemon or direct execution?
+
+**A**: The CLI automatically detects and uses the daemon if available. If the daemon is not available, you'll see a warning: "Warning: Daemon not available, falling back to direct execution"
+
+You can also check:
+
+```bash
+# Check if daemon is running
+sudo systemctl status derpyd
+
+# Check if socket exists
+ls -l /var/run/derpy.sock
+
+# Check if you're in the derpy group
+groups | grep derpy
+```
+
+### Q: Why do I need to be in the derpy group?
+
+**A**: The `derpy` group provides secure access control to the daemon socket. Only users in this group can communicate with the daemon and build images without sudo. This prevents unauthorized users from executing privileged operations.
+
+### Q: Do I need to log out after being added to the derpy group?
+
+**A**: Yes! Group membership changes only take effect after you log out and back in. Simply opening a new terminal is not sufficient. After logging back in, verify with `groups | grep derpy`.
+
+### Q: Can multiple users build images at the same time?
+
+**A**: Yes! The daemon is designed to handle concurrent builds from multiple users safely. Each build is isolated and receives its own output stream.
+
+### Q: What happens if the daemon crashes during a build?
+
+**A**: The CLI will detect the connection loss and display an error. The daemon is configured to restart automatically via systemd. You can retry your build after the daemon restarts.
+
+### Q: Can I use the daemon in CI/CD pipelines?
+
+**A**: Yes, but it's often simpler to use direct execution with sudo in CI/CD environments:
+
+```bash
+# In CI/CD, use sudo directly
+sudo derpy build . -f Dockerfile -t myapp:latest
+```
+
+The daemon is most beneficial for interactive development where multiple developers are building frequently.
+
+### Q: Does the daemon work on macOS or Windows?
+
+**A**: No, the daemon is currently only supported on Linux systems with systemd. On macOS and Windows, use direct execution (which doesn't require sudo since build isolation isn't available on those platforms).
+
+### Q: How do I uninstall the daemon?
+
+**A**: To remove the daemon:
+
+```bash
+# Stop and disable the service
+sudo systemctl stop derpyd
+sudo systemctl disable derpyd
+
+# Remove the service file
+sudo rm /etc/systemd/system/derpyd.service
+sudo systemctl daemon-reload
+
+# Remove the socket
+sudo rm /var/run/derpy.sock
+
+# Optionally remove the derpy group
+sudo groupdel derpy
+```
+
+### Q: Where are daemon logs stored?
+
+**A**: Daemon logs are stored in the systemd journal. View them with:
+
+```bash
+# View recent logs
+sudo journalctl -u derpyd -n 50
+
+# Follow logs in real-time
+sudo journalctl -u derpyd -f
+
+# View logs since last boot
+sudo journalctl -u derpyd -b
+```
+
+### Q: Is the daemon secure?
+
+**A**: Yes, the daemon is designed with security in mind:
+
+- Socket has restrictive permissions (0660, owner: root, group: derpy)
+- Only users in the derpy group can connect
+- All requests are validated before execution
+- User inputs are sanitized to prevent injection attacks
+- The daemon drops privileges for non-critical operations
+- All operations are logged for audit purposes
+
+Only add trusted users to the `derpy` group.
 
 ## Development Status
 

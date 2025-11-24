@@ -6,6 +6,10 @@ include CONTRIBUTING.md
 # Include configuration files
 include pyproject.toml
 
+# Include daemon installation scripts and systemd service files
+recursive-include scripts *.sh *.service
+include scripts/README.md
+
 # Exclude development and build artifacts
 exclude .gitignore
 exclude .coverage

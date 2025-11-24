@@ -19,6 +19,7 @@ from derpy.build import BuildEngine, BuildContext, BuildError
 from derpy.storage import ImageManager, StorageError
 from derpy.registry import RegistryClient, RegistryError
 from derpy.core.exceptions import RegistryAuthenticationError
+from derpy.daemon.client import DaemonClient, DaemonConnectionError, DaemonTimeoutError, DaemonProtocolError
 
 
 def format_size(size_bytes: int) -> str:
@@ -35,6 +36,22 @@ def format_size(size_bytes: int) -> str:
             return f"{size_bytes:.1f}{unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f}TB"
+
+
+def handle_daemon_error(error: Exception, operation: str, ctx: click.Context) -> None:
+    """Handle daemon errors with user-friendly messages and context.
+    
+    Provides detailed error messages with context about the failed operation
+    and suggestions for fixing common issues.
+    
+    Args:
+        error: The exception that was raised
+        operation: Description of the operation that failed (e.g., "Building image 'myapp:latest'")
+        ctx: Click context for exiting with appropriate code
+    """
+    click.echo(f"✗ Operation failed: {operation}", err=True)
+    click.echo(f"\nError: {error}", err=True)
+    ctx.exit(1)
 
 
 class BannerGroup(click.Group):
@@ -267,41 +284,73 @@ def build(ctx, context: Path, dockerfile: Path, tag: str):
         click.echo(f"  Dockerfile: {dockerfile_path}")
         click.echo()
         
-        # Create build context
-        build_context = BuildContext(
-            context_path=context_path,
-            dockerfile_path=dockerfile_path
-        )
+        # Try daemon first
+        daemon_client = DaemonClient()
         
-        # Load configuration
-        config_manager = ConfigManager()
-        config = config_manager.get_config()
-        
-        # Create storage manager for base image caching
-        storage_manager = ImageManager(config.images_path)
-        
-        # Build image
-        click.echo("Parsing Dockerfile...")
-        build_engine = BuildEngine(
-            storage_manager=storage_manager,
-            enable_isolation=config.build_settings.enable_isolation,
-            base_image_cache_dir=Path(config.build_settings.base_image_cache_dir).expanduser(),
-            chroot_timeout=config.build_settings.chroot_timeout
-        )
-        
-        click.echo("Executing build instructions...")
-        image = build_engine.build_image(build_context, tag)
-        
-        click.echo(f"Built image with {len(image.layers)} layer(s)")
-        click.echo()
-        
-        # Store image in local repository
-        click.echo("Storing image in local repository...")
-        image_manager = ImageManager()
-        image_manager.store_image(image, tag)
-        
-        click.echo()
-        click.echo(f"✓ Successfully built and stored image: {tag}")
+        if daemon_client.is_available():
+            # Use daemon
+            try:
+                click.echo("Using daemon for build...")
+                
+                response = daemon_client.send_build_request(
+                    context_path=context_path,
+                    dockerfile_path=dockerfile_path,
+                    tag=tag,
+                    output_callback=lambda line: click.echo(line, nl=False)
+                )
+                
+                if response.success:
+                    click.echo()
+                    click.echo(f"✓ Successfully built image: {tag}")
+                    if response.image_digest:
+                        click.echo(f"  Digest: {response.image_digest}")
+                else:
+                    click.echo(f"Build failed: {response.error_message}", err=True)
+                    ctx.exit(response.exit_code if response.exit_code != 0 else 1)
+                    
+            except (DaemonConnectionError, DaemonTimeoutError, DaemonProtocolError) as e:
+                handle_daemon_error(e, f"Building image '{tag}'", ctx)
+        else:
+            # Fall back to direct execution
+            click.echo("Warning: Daemon not available, falling back to direct execution")
+            click.echo("This requires sudo privileges for build isolation.")
+            click.echo()
+            
+            # Create build context
+            build_context = BuildContext(
+                context_path=context_path,
+                dockerfile_path=dockerfile_path
+            )
+            
+            # Load configuration
+            config_manager = ConfigManager()
+            config = config_manager.get_config()
+            
+            # Create storage manager for base image caching
+            storage_manager = ImageManager(config.images_path)
+            
+            # Build image
+            click.echo("Parsing Dockerfile...")
+            build_engine = BuildEngine(
+                storage_manager=storage_manager,
+                enable_isolation=config.build_settings.enable_isolation,
+                base_image_cache_dir=Path(config.build_settings.base_image_cache_dir).expanduser(),
+                chroot_timeout=config.build_settings.chroot_timeout
+            )
+            
+            click.echo("Executing build instructions...")
+            image = build_engine.build_image(build_context, tag)
+            
+            click.echo(f"Built image with {len(image.layers)} layer(s)")
+            click.echo()
+            
+            # Store image in local repository
+            click.echo("Storing image in local repository...")
+            image_manager = ImageManager()
+            image_manager.store_image(image, tag)
+            
+            click.echo()
+            click.echo(f"✓ Successfully built and stored image: {tag}")
         
     except BuildError as e:
         click.echo(f"Build error: {e}", err=True)
@@ -333,40 +382,85 @@ def list_images(ctx, format: str):
       derpy ls --format json
     """
     try:
-        image_manager = ImageManager()
-        images = image_manager.list_local_images()
+        # Try daemon first
+        daemon_client = DaemonClient()
         
-        if not images:
-            click.echo("No images found in local repository.")
-            click.echo()
-            click.echo("Build an image with: derpy build <context> -t <tag>")
-            return
-        
-        if format == 'json':
-            # Output as JSON
-            import json
-            images_data = [
-                {
-                    'tag': img.tag,
-                    'size': img.size,
-                    'created': img.created,
-                    'architecture': img.architecture,
-                    'os': img.os
-                }
-                for img in images
-            ]
-            click.echo(json.dumps(images_data, indent=2))
+        if daemon_client.is_available():
+            # Use daemon
+            try:
+                response = daemon_client.send_list_request()
+                
+                if not response.images:
+                    click.echo("No images found in local repository.")
+                    click.echo()
+                    click.echo("Build an image with: derpy build <context> -t <tag>")
+                    return
+                
+                if format == 'json':
+                    # Output as JSON
+                    import json
+                    images_data = [
+                        {
+                            'tag': img.tag,
+                            'size': img.size,
+                            'created': img.created,
+                            'digest': img.digest
+                        }
+                        for img in response.images
+                    ]
+                    click.echo(json.dumps(images_data, indent=2))
+                else:
+                    # Output as table
+                    click.echo()
+                    click.echo(f"{'TAG':<40} {'SIZE':<15} {'CREATED':<19} {'DIGEST'}")
+                    click.echo("-" * 100)
+                    
+                    for img in response.images:
+                        size_str = format_size(img.size)
+                        digest_short = img.digest[:12] if img.digest else "N/A"
+                        click.echo(f"{img.tag:<40} {size_str:<15} {img.created:<19} {digest_short}")
+                    
+                    click.echo()
+                    click.echo(f"Total: {len(response.images)} image(s)")
+                    
+            except (DaemonConnectionError, DaemonTimeoutError, DaemonProtocolError) as e:
+                handle_daemon_error(e, "Listing images", ctx)
         else:
-            # Output as table
-            click.echo()
-            click.echo(f"{'TAG':<40} {'SIZE':<10} {'CREATED':<19} {'PLATFORM'}")
-            click.echo("-" * 84)
+            # Execute directly (non-privileged operation)
+            image_manager = ImageManager()
+            images = image_manager.list_local_images()
             
-            for img in images:
-                click.echo(str(img))
+            if not images:
+                click.echo("No images found in local repository.")
+                click.echo()
+                click.echo("Build an image with: derpy build <context> -t <tag>")
+                return
             
-            click.echo()
-            click.echo(f"Total: {len(images)} image(s)")
+            if format == 'json':
+                # Output as JSON
+                import json
+                images_data = [
+                    {
+                        'tag': img.tag,
+                        'size': img.size,
+                        'created': img.created,
+                        'architecture': img.architecture,
+                        'os': img.os
+                    }
+                    for img in images
+                ]
+                click.echo(json.dumps(images_data, indent=2))
+            else:
+                # Output as table
+                click.echo()
+                click.echo(f"{'TAG':<40} {'SIZE':<10} {'CREATED':<19} {'PLATFORM'}")
+                click.echo("-" * 84)
+                
+                for img in images:
+                    click.echo(str(img))
+                
+                click.echo()
+                click.echo(f"Total: {len(images)} image(s)")
             
     except StorageError as e:
         click.echo(f"Storage error: {e}", err=True)
@@ -394,29 +488,48 @@ def rm(ctx, image: str):
     try:
         click.echo(f"Removing image '{image}'...")
         
-        # Create ImageManager instance
-        image_manager = ImageManager()
+        # Try daemon first
+        daemon_client = DaemonClient()
         
-        # Calculate size before removal for reporting
-        metadata = image_manager._get_image_metadata(image)
-        freed_size = metadata.size if metadata else 0
-        
-        # Call remove_image(tag) and check return value
-        removed = image_manager.remove_image(image)
-        
-        if removed:
-            # Display success message with freed space on success
-            click.echo(f"✓ Successfully removed image: {image}")
-            if freed_size > 0:
-                # Format size in human-readable format
-                size_str = format_size(freed_size)
-                click.echo(f"  Freed: {size_str}")
+        if daemon_client.is_available():
+            # Use daemon
+            try:
+                response = daemon_client.send_remove_request(image)
+                
+                if response.success:
+                    click.echo(f"✓ Successfully removed image: {image}")
+                else:
+                    click.echo(f"Error: {response.error_message}", err=True)
+                    click.echo()
+                    click.echo("List available images with: derpy ls")
+                    ctx.exit(1)
+                    
+            except (DaemonConnectionError, DaemonTimeoutError, DaemonProtocolError) as e:
+                handle_daemon_error(e, f"Removing image '{image}'", ctx)
         else:
-            # Display error message with suggestion to run `derpy ls` if not found
-            click.echo(f"Error: Image '{image}' not found in local repository.", err=True)
-            click.echo()
-            click.echo("List available images with: derpy ls")
-            ctx.exit(1)
+            # Execute directly (non-privileged operation)
+            image_manager = ImageManager()
+            
+            # Calculate size before removal for reporting
+            metadata = image_manager._get_image_metadata(image)
+            freed_size = metadata.size if metadata else 0
+            
+            # Call remove_image(tag) and check return value
+            removed = image_manager.remove_image(image)
+            
+            if removed:
+                # Display success message with freed space on success
+                click.echo(f"✓ Successfully removed image: {image}")
+                if freed_size > 0:
+                    # Format size in human-readable format
+                    size_str = format_size(freed_size)
+                    click.echo(f"  Freed: {size_str}")
+            else:
+                # Display error message with suggestion to run `derpy ls` if not found
+                click.echo(f"Error: Image '{image}' not found in local repository.", err=True)
+                click.echo()
+                click.echo("List available images with: derpy ls")
+                ctx.exit(1)
             
     except StorageError as e:
         # Handle StorageError exceptions and display error messages
@@ -449,63 +562,83 @@ def purge(ctx, force: bool):
       derpy purge --force
     """
     try:
-        # Create ImageManager instance
-        image_manager = ImageManager()
+        # Try daemon first
+        daemon_client = DaemonClient()
         
-        # Load configuration to get cache directory
-        config_manager = ConfigManager()
-        config = config_manager.get_config()
-        cache_dir = Path(config.build_settings.base_image_cache_dir).expanduser()
-        
-        # Calculate storage size and cache size before removal
-        storage_size = image_manager.calculate_storage_size()
-        cache_size = image_manager.get_cache_size(cache_dir)
-        total_size = storage_size + cache_size
-        
-        # Count images from metadata
-        all_metadata = image_manager._load_metadata()
-        image_count = len(all_metadata)
-        
-        # Check if there are no images
-        if image_count == 0 and cache_size == 0:
-            click.echo("No images found in local repository.")
-            click.echo("Nothing to purge.")
-            return
-        
-        # Display warning with size information unless --force is specified
-        if not force:
-            click.echo("WARNING: This will remove all images and cached data.")
-            click.echo()
-            click.echo(f"Images: {image_count}")
-            click.echo(f"Storage: {format_size(storage_size)}")
-            click.echo(f"Cache: {format_size(cache_size)}")
-            click.echo(f"Total: {format_size(total_size)}")
-            click.echo()
+        if daemon_client.is_available():
+            # Use daemon
+            try:
+                # Note: Daemon handles confirmation internally based on force flag
+                response = daemon_client.send_purge_request(force=force)
+                
+                if response.success:
+                    click.echo()
+                    click.echo("✓ Successfully purged all images")
+                    click.echo(f"  Images removed: {response.removed_count}")
+                else:
+                    click.echo(f"Error: {response.error_message}", err=True)
+                    ctx.exit(1)
+                    
+            except (DaemonConnectionError, DaemonTimeoutError, DaemonProtocolError) as e:
+                handle_daemon_error(e, "Purging all images", ctx)
+        else:
+            # Execute directly (non-privileged operation)
+            image_manager = ImageManager()
             
-            # Prompt user for confirmation
-            response = click.prompt("Are you sure you want to continue? [y/N]", type=str, default="N")
+            # Load configuration to get cache directory
+            config_manager = ConfigManager()
+            config = config_manager.get_config()
+            cache_dir = Path(config.build_settings.base_image_cache_dir).expanduser()
             
-            # Handle user cancellation (exit with code 0)
-            if response.lower() not in ('y', 'yes'):
-                click.echo("Operation cancelled.")
+            # Calculate storage size and cache size before removal
+            storage_size = image_manager.calculate_storage_size()
+            cache_size = image_manager.get_cache_size(cache_dir)
+            total_size = storage_size + cache_size
+            
+            # Count images from metadata
+            all_metadata = image_manager._load_metadata()
+            image_count = len(all_metadata)
+            
+            # Check if there are no images
+            if image_count == 0 and cache_size == 0:
+                click.echo("No images found in local repository.")
+                click.echo("Nothing to purge.")
                 return
-        
-        # Call remove_all_images() if confirmed
-        click.echo("Removing all images...")
-        removed_count = image_manager.remove_all_images()
-        
-        # Clear base image cache directory using shutil.rmtree
-        if cache_dir.exists():
-            click.echo("Clearing base image cache...")
-            shutil.rmtree(cache_dir)
-            # Recreate the cache directory
-            cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Display summary with images removed and space freed
-        click.echo()
-        click.echo("✓ Successfully purged all images")
-        click.echo(f"  Images removed: {removed_count}")
-        click.echo(f"  Space freed: {format_size(total_size)}")
+            
+            # Display warning with size information unless --force is specified
+            if not force:
+                click.echo("WARNING: This will remove all images and cached data.")
+                click.echo()
+                click.echo(f"Images: {image_count}")
+                click.echo(f"Storage: {format_size(storage_size)}")
+                click.echo(f"Cache: {format_size(cache_size)}")
+                click.echo(f"Total: {format_size(total_size)}")
+                click.echo()
+                
+                # Prompt user for confirmation
+                response = click.prompt("Are you sure you want to continue? [y/N]", type=str, default="N")
+                
+                # Handle user cancellation (exit with code 0)
+                if response.lower() not in ('y', 'yes'):
+                    click.echo("Operation cancelled.")
+                    return
+            
+            # Call remove_all_images() if confirmed
+            click.echo("Removing all images...")
+            removed_count = image_manager.remove_all_images()
+            
+            # Clear base image cache directory using shutil.rmtree
+            if cache_dir.exists():
+                click.echo("Clearing base image cache...")
+                shutil.rmtree(cache_dir)
+                # Recreate the cache directory
+                cache_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Display summary with images removed and space freed
+            click.echo()
+            click.echo("✓ Successfully purged all images")
+            click.echo(f"  Images removed: {removed_count}")
+            click.echo(f"  Space freed: {format_size(total_size)}")
         
     except StorageError as e:
         # Handle StorageError exceptions and display error messages
@@ -674,6 +807,65 @@ def logout(ctx, registry: str):
     except Exception as e:
         click.echo(f"Unexpected error: {e}", err=True)
         ctx.exit(1)
+
+
+@cli.group()
+@click.pass_context
+def daemon(ctx):
+    """Manage the Derpy daemon (Linux only)."""
+    pass
+
+
+@daemon.command(name='setup-info')
+@click.pass_context
+def daemon_setup_info(ctx):
+    """
+    Display instructions for setting up the Derpy daemon.
+    
+    The daemon enables unprivileged users to build container images
+    without using sudo for every command.
+    """
+    import platform
+    
+    if platform.system() != 'Linux':
+        click.echo("⚠ Daemon is only supported on Linux systems", err=True)
+        click.echo()
+        click.echo("On macOS and Windows, derpy falls back to direct execution.")
+        return
+    
+    click.echo()
+    click.echo("=" * 70)
+    click.echo("  Derpy Daemon Setup Instructions")
+    click.echo("=" * 70)
+    click.echo()
+    click.echo("The Derpy daemon (derpyd) runs as a privileged service and allows")
+    click.echo("unprivileged users to build containers without sudo.")
+    click.echo()
+    click.echo("Installation Steps:")
+    click.echo()
+    click.echo("1. Download the installation script:")
+    click.echo("   curl -O https://raw.githubusercontent.com/adonis-legon/derpy/main/scripts/install-daemon.sh")
+    click.echo()
+    click.echo("2. Download the systemd service file:")
+    click.echo("   mkdir -p systemd")
+    click.echo("   curl -o systemd/derpyd.service https://raw.githubusercontent.com/adonis-legon/derpy/main/scripts/systemd/derpyd.service")
+    click.echo()
+    click.echo("3. Make the script executable:")
+    click.echo("   chmod +x install-daemon.sh")
+    click.echo()
+    click.echo("4. Run the installation script:")
+    click.echo("   sudo bash install-daemon.sh")
+    click.echo()
+    click.echo("5. Add your user to the derpy group:")
+    click.echo("   sudo usermod -aG derpy $USER")
+    click.echo()
+    click.echo("6. Log out and back in for group changes to take effect")
+    click.echo()
+    click.echo("=" * 70)
+    click.echo()
+    click.echo("For detailed documentation, see:")
+    click.echo("https://github.com/adonis-legon/derpy/blob/main/docs/installation.md")
+    click.echo()
 
 
 @cli.command()
