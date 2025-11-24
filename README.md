@@ -747,6 +747,53 @@ When you're done developing:
 deactivate
 ```
 
+### Version Management
+
+Derpy includes a version management script to keep version numbers synchronized across the project:
+
+```bash
+# Show current version
+python scripts/version.py show
+
+# Set a specific version
+python scripts/version.py set 0.2.0
+
+# Bump major version (1.0.0 -> 2.0.0)
+python scripts/version.py bump major
+
+# Bump minor version (0.1.0 -> 0.2.0)
+python scripts/version.py bump minor
+
+# Bump patch version (0.1.0 -> 0.1.1)
+python scripts/version.py bump patch
+```
+
+The script automatically updates both `pyproject.toml` and `derpy/__init__.py` to keep them in sync.
+
+**Workflow for releasing a new version:**
+
+1. Update the version:
+
+   ```bash
+   python scripts/version.py bump minor
+   ```
+
+2. Review the changes:
+
+   ```bash
+   git diff
+   ```
+
+3. Commit and push:
+
+   ```bash
+   git add derpy/__init__.py pyproject.toml
+   git commit -m "Bump version to 0.2.0"
+   git push
+   ```
+
+4. The CI/CD pipeline will automatically build and publish to PyPI when merged to main.
+
 ## Example Dockerfiles
 
 ### Simple Python Application
