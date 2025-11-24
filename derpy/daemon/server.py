@@ -268,9 +268,12 @@ class DaemonServer:
             
             logger.info("Client authorized, processing requests")
             
+            # Create message framer for this client
+            framer = MessageFramer()
+            
             # Receive request from client
             try:
-                request = MessageFramer.receive_message(client_socket)
+                request = framer.receive_message(client_socket)
                 if request is None:
                     logger.warning("Client disconnected before sending request")
                     return
