@@ -131,15 +131,34 @@ if [ -n "$SERVICE_FILE" ]; then
     sed "s|/usr/local/bin/derpyd|$DERPYD_PATH|g" "$SERVICE_FILE" > /etc/systemd/system/derpyd.service
     print_success "Service file installed to /etc/systemd/system/derpyd.service"
 else
-    print_error "Service file not found in any expected location"
-    echo "Searched locations:"
-    for path in "${SEARCH_PATHS[@]}"; do
-        echo "  - $path"
-    done
-    echo ""
-    echo "Please download the complete installation script from:"
-    echo "https://github.com/adonis-legon/derpy/tree/main/scripts"
-    exit 1
+    # Create the service file from embedded template
+    print_info "Creating systemd service file from template..."
+    cat > /etc/systemd/system/derpyd.service <<EOF
+[Unit]
+Description=Derpy Container Daemon
+Documentation=https://github.com/adonis-legon/derpy
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=$DERPYD_PATH --socket /var/run/derpy.sock
+ExecStop=/bin/kill -SIGTERM \$MAINPID
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/run /var/lib/derpy /root/.derpy
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    print_success "Service file created at /etc/systemd/system/derpyd.service"
 fi
 
 # Reload systemd daemon
