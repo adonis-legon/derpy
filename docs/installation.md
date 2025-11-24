@@ -37,11 +37,34 @@ Before installing the Derpy daemon, ensure your system meets the following requi
 
 ### Step 1: Install Derpy Package
 
-First, install the Derpy package using pip. For system-wide daemon installation, install globally:
+First, install the Derpy package. On modern Linux distributions (Ubuntu 23.04+, Debian 12+), use `pipx` for isolated installation:
+
+**Option A: Using pipx (Recommended for Ubuntu 23.04+, Debian 12+)**
+
+```bash
+# Install pipx if not already installed
+sudo apt update
+sudo apt install -y pipx
+
+# Ensure pipx binaries are in PATH
+pipx ensurepath
+
+# Install derpy-tool
+pipx install derpy-tool
+```
+
+**Option B: Using pip with sudo (Ubuntu 22.04, older distributions)**
 
 ```bash
 # Install from PyPI
 sudo pip install derpy-tool
+```
+
+**Option C: Using pip with --break-system-packages (Not recommended)**
+
+```bash
+# Only use if you understand the risks
+pip install --break-system-packages derpy-tool
 ```
 
 Verify the installation:
