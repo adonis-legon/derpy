@@ -84,17 +84,13 @@ derpy daemon setup-info
 
 This command will show you the exact steps needed to download and install the daemon.
 
-### Step 3: Download Installation Scripts
+### Step 3: Download Installation Script
 
-Download the required files from GitHub:
+Download the installation script from GitHub:
 
 ```bash
 # Download the installation script
 curl -O https://raw.githubusercontent.com/adonis-legon/derpy/main/scripts/install-daemon.sh
-
-# Download the systemd service file
-mkdir -p systemd
-curl -o systemd/derpyd.service https://raw.githubusercontent.com/adonis-legon/derpy/main/scripts/systemd/derpyd.service
 
 # Make the script executable
 chmod +x install-daemon.sh
