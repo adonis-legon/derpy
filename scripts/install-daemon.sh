@@ -155,7 +155,7 @@ StandardError=journal
 NoNewPrivileges=false
 PrivateTmp=yes
 ProtectSystem=strict
-ProtectHome=yes
+ProtectHome=read-only
 ReadWritePaths=/var/run /var/lib/derpy /root/.derpy
 
 [Install]
