@@ -60,45 +60,98 @@ else
     print_success "derpy group created"
 fi
 
-# Install derpy package with pip
-print_info "Installing derpy package..."
-cd "$PROJECT_ROOT"
+# Check if derpy-tool is already installed
+DERPY_INSTALLED=false
+DERPYD_AVAILABLE=false
 
-# Check if we're in a virtual environment
-if [ -n "$VIRTUAL_ENV" ]; then
-    print_error "Cannot install in a virtual environment"
-    echo "Please deactivate the virtual environment and run again."
-    exit 1
+if python3 -c "import derpy" 2>/dev/null; then
+    DERPY_INSTALLED=true
+    print_success "derpy-tool package is already installed"
 fi
 
-# Install the package
-if pip install -e . > /dev/null 2>&1; then
-    print_success "derpy package installed"
-else
-    print_error "Failed to install derpy package"
-    exit 1
+if command -v derpyd &> /dev/null; then
+    DERPYD_AVAILABLE=true
+    print_success "derpyd binary found at $(which derpyd)"
 fi
 
-# Verify derpyd binary is available
-if ! command -v derpyd &> /dev/null; then
-    print_error "derpyd binary not found after installation"
-    echo "Expected location: /usr/local/bin/derpyd"
-    exit 1
+# Install derpy package if needed
+if [ "$DERPY_INSTALLED" = false ] || [ "$DERPYD_AVAILABLE" = false ]; then
+    print_info "Installing derpy package..."
+    
+    # Check if we're in a virtual environment
+    if [ -n "$VIRTUAL_ENV" ]; then
+        print_error "Cannot install in a virtual environment"
+        echo "Please deactivate the virtual environment and run again."
+        exit 1
+    fi
+    
+    # Try to install from local source if available
+    if [ -f "$PROJECT_ROOT/pyproject.toml" ]; then
+        print_info "Installing from local source..."
+        cd "$PROJECT_ROOT"
+        if pip install -e . > /dev/null 2>&1; then
+            print_success "derpy package installed from source"
+        else
+            print_error "Failed to install derpy package from source"
+            exit 1
+        fi
+    else
+        # Try to install from PyPI
+        print_info "Installing from PyPI..."
+        if pip install derpy-tool > /dev/null 2>&1; then
+            print_success "derpy-tool package installed from PyPI"
+        else
+            print_error "Failed to install derpy-tool package"
+            echo "Please install derpy-tool manually: pip install derpy-tool"
+            exit 1
+        fi
+    fi
+    
+    # Verify derpyd binary is available after installation
+    if ! command -v derpyd &> /dev/null; then
+        print_error "derpyd binary not found after installation"
+        echo "Expected location: /usr/local/bin/derpyd or ~/.local/bin/derpyd"
+        exit 1
+    fi
+    
+    print_success "derpyd binary found at $(which derpyd)"
 fi
 
-print_success "derpyd binary found at $(which derpyd)"
-
-# Copy systemd service file
+# Install systemd service file
 print_info "Installing systemd service file..."
-SERVICE_FILE="$SCRIPT_DIR/systemd/derpyd.service"
+DERPYD_PATH=$(which derpyd)
 
-if [ ! -f "$SERVICE_FILE" ]; then
-    print_error "Service file not found: $SERVICE_FILE"
+# Try to find the service file in multiple locations
+SERVICE_FILE=""
+SEARCH_PATHS=(
+    "$SCRIPT_DIR/systemd/derpyd.service"                                    # Local repo
+    "/usr/local/share/derpy/scripts/systemd/derpyd.service"                # System install
+    "/usr/share/derpy/scripts/systemd/derpyd.service"                      # Alternative system install
+    "$(python3 -c 'import derpy, os; print(os.path.dirname(derpy.__file__))' 2>/dev/null)/../scripts/systemd/derpyd.service"  # Package location
+)
+
+for path in "${SEARCH_PATHS[@]}"; do
+    if [ -f "$path" ]; then
+        SERVICE_FILE="$path"
+        break
+    fi
+done
+
+if [ -n "$SERVICE_FILE" ]; then
+    # Use the service file, substituting the derpyd path
+    sed "s|/usr/local/bin/derpyd|$DERPYD_PATH|g" "$SERVICE_FILE" > /etc/systemd/system/derpyd.service
+    print_success "Service file installed to /etc/systemd/system/derpyd.service"
+else
+    print_error "Service file not found in any expected location"
+    echo "Searched locations:"
+    for path in "${SEARCH_PATHS[@]}"; do
+        echo "  - $path"
+    done
+    echo ""
+    echo "Please download the complete installation script from:"
+    echo "https://github.com/adonis-legon/derpy/tree/main/scripts"
     exit 1
 fi
-
-cp "$SERVICE_FILE" /etc/systemd/system/derpyd.service
-print_success "Service file copied to /etc/systemd/system/derpyd.service"
 
 # Reload systemd daemon
 print_info "Reloading systemd daemon..."
