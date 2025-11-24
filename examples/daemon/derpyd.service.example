@@ -1,0 +1,139 @@
+# Example systemd service file for Derpy Daemon (derpyd)
+#
+# This file demonstrates how to configure the derpyd service with various options.
+# Copy this file to /etc/systemd/system/derpyd.service and customize as needed.
+#
+# Installation:
+#   sudo cp derpyd.service.example /etc/systemd/system/derpyd.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable derpyd
+#   sudo systemctl start derpyd
+
+[Unit]
+# Service description shown in systemctl status
+Description=Derpy Container Daemon
+
+# Link to documentation
+Documentation=https://github.com/adonis-legon/derpy
+
+# Start after network is available
+# This ensures the daemon can communicate with registries if needed
+After=network.target
+
+# Optional: Start after Docker if both are installed
+# Uncomment if you want to ensure Docker is running first
+# After=docker.service
+
+[Service]
+# Service type - 'simple' means the process doesn't fork
+Type=simple
+
+# Command to start the daemon
+# Default socket path: /var/run/derpy.sock
+ExecStart=/usr/local/bin/derpyd --socket /var/run/derpy.sock
+
+# Optional: Customize socket path
+# ExecStart=/usr/local/bin/derpyd --socket /var/run/custom-derpy.sock
+
+# Optional: Set log level (DEBUG, INFO, WARNING, ERROR)
+# ExecStart=/usr/local/bin/derpyd --socket /var/run/derpy.sock --log-level INFO
+
+# Optional: Set maximum concurrent builds
+# ExecStart=/usr/local/bin/derpyd --socket /var/run/derpy.sock --max-workers 8
+
+# Command to stop the daemon gracefully
+# SIGTERM allows in-progress builds to complete before shutdown
+ExecStop=/bin/kill -SIGTERM $MAINPID
+
+# Restart policy - restart on failure
+Restart=on-failure
+
+# Wait 5 seconds before restarting after a failure
+RestartSec=5s
+
+# Send stdout to systemd journal
+StandardOutput=journal
+
+# Send stderr to systemd journal
+StandardError=journal
+
+# Optional: Set environment variables
+# Environment="DERPY_CONFIG=/etc/derpy/config.yaml"
+# Environment="DERPY_CACHE_DIR=/var/cache/derpy"
+
+# Security Settings
+# ==================
+
+# Don't allow the service to gain new privileges
+# Set to 'false' because derpyd needs root for chroot operations
+NoNewPrivileges=false
+
+# Use a private /tmp directory
+# This isolates temporary files from other processes
+PrivateTmp=yes
+
+# Protect system directories from modification
+# 'strict' means only explicitly listed paths are writable
+ProtectSystem=strict
+
+# Protect user home directories from access
+# Set to 'yes' to prevent access to /home, /root, and /run/user
+ProtectHome=yes
+
+# Paths that the daemon needs write access to
+# Add additional paths here if needed
+ReadWritePaths=/var/run /var/lib/derpy /root/.derpy
+
+# Optional: Additional security hardening
+# Uncomment these for stricter security (may need adjustment based on your setup)
+
+# Prevent access to kernel logs
+# ProtectKernelLogs=yes
+
+# Prevent loading kernel modules
+# ProtectKernelModules=yes
+
+# Prevent access to kernel tunables
+# ProtectKernelTunables=yes
+
+# Prevent access to control groups
+# ProtectControlGroups=yes
+
+# Restrict address families to IPv4 and IPv6
+# RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Prevent access to real-time scheduling
+# RestrictRealtime=yes
+
+# Lock down personality syscall
+# LockPersonality=yes
+
+# Restrict namespace creation
+# RestrictNamespaces=yes
+
+# Set memory limit (optional)
+# MemoryLimit=2G
+
+# Set CPU quota (optional, 100% = 1 core)
+# CPUQuota=200%
+
+# Resource Limits
+# ===============
+
+# Optional: Limit number of file descriptors
+# LimitNOFILE=65536
+
+# Optional: Limit number of processes
+# LimitNPROC=4096
+
+# Optional: Limit core dump size
+# LimitCORE=0
+
+[Install]
+# Start this service when the system reaches multi-user mode
+# This is the normal boot target for servers
+WantedBy=multi-user.target
+
+# Optional: Make this service required by multi-user.target
+# This means the system won't reach multi-user mode if this service fails
+# RequiredBy=multi-user.target

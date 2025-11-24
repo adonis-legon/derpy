@@ -1,0 +1,247 @@
+# Example Daemon Configuration File for Derpy
+#
+# This file demonstrates how to configure the derpyd daemon with various options.
+# The daemon reads configuration from environment variables and command-line flags.
+# This file is for reference only - actual configuration is done via systemd service file.
+#
+# Note: The daemon currently uses command-line flags for configuration.
+# This file shows what a future YAML-based configuration might look like.
+
+# Socket Configuration
+# ====================
+
+# Path to the Unix domain socket
+# Default: /var/run/derpy.sock
+socket_path: /var/run/derpy.sock
+
+# Socket permissions (octal)
+# Default: 0660 (owner and group read/write)
+socket_permissions: 0660
+
+# Socket group name
+# Users in this group can access the daemon
+# Default: derpy
+socket_group: derpy
+
+# Daemon Behavior
+# ===============
+
+# Maximum number of concurrent build operations
+# Default: 4
+max_workers: 4
+
+# Timeout for build operations (seconds)
+# 0 means no timeout
+# Default: 3600 (1 hour)
+build_timeout: 3600
+
+# Graceful shutdown timeout (seconds)
+# How long to wait for in-progress builds before forcing shutdown
+# Default: 300 (5 minutes)
+shutdown_timeout: 300
+
+# Logging Configuration
+# =====================
+
+# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Default: INFO
+log_level: INFO
+
+# Log format
+# Options: json, text
+# Default: text
+log_format: text
+
+# Include timestamps in logs
+# Default: true
+log_timestamps: true
+
+# Log file path (optional)
+# If not set, logs go to stdout/stderr (systemd journal)
+# log_file: /var/log/derpy/derpyd.log
+
+# Build Settings
+# ==============
+
+# Enable build isolation (chroot)
+# Default: true on Linux, false on other platforms
+enable_isolation: true
+
+# Base image cache directory
+# Default: /root/.derpy/cache/base-images
+base_image_cache_dir: /root/.derpy/cache/base-images
+
+# Maximum cache size (MB)
+# 0 means unlimited
+# Default: 10240 (10 GB)
+max_cache_size: 10240
+
+# Cache cleanup policy
+# Options: lru (least recently used), fifo (first in first out)
+# Default: lru
+cache_cleanup_policy: lru
+
+# Chroot timeout for individual commands (seconds)
+# Default: 300 (5 minutes)
+chroot_timeout: 300
+
+# Security Settings
+# =================
+
+# Validate client credentials using SO_PEERCRED
+# Default: true
+validate_credentials: true
+
+# Allowed user groups (in addition to socket_group)
+# Users in these groups can also access the daemon
+# Default: []
+# allowed_groups:
+#   - docker
+#   - admin
+
+# Enable input sanitization
+# Default: true
+sanitize_inputs: true
+
+# Enable path validation (prevent directory traversal)
+# Default: true
+validate_paths: true
+
+# Enable command injection prevention
+# Default: true
+prevent_injection: true
+
+# Drop privileges for non-critical operations
+# Default: true
+drop_privileges: true
+
+# Temporary directory permissions (octal)
+# Default: 0700 (owner only)
+temp_dir_permissions: 0700
+
+# Sanitize credentials in logs
+# Default: true
+sanitize_logs: true
+
+# Registry Settings
+# =================
+
+# Registry timeout (seconds)
+# Default: 30
+registry_timeout: 30
+
+# Registry retry attempts
+# Default: 3
+registry_retries: 3
+
+# Registry retry delay (seconds)
+# Default: 1
+registry_retry_delay: 1
+
+# Use authentication from user's home directory
+# When true, uses credentials from the requesting user's ~/.derpy/auth.json
+# Default: true
+use_user_credentials: true
+
+# Performance Settings
+# ====================
+
+# Enable concurrent layer downloads
+# Default: true
+concurrent_downloads: true
+
+# Maximum concurrent downloads
+# Default: 4
+max_concurrent_downloads: 4
+
+# Buffer size for socket communication (bytes)
+# Default: 8192
+socket_buffer_size: 8192
+
+# Enable output streaming compression
+# Default: false
+compress_output: false
+
+# Monitoring Settings
+# ===================
+
+# Enable metrics collection
+# Default: false
+enable_metrics: false
+
+# Metrics port (HTTP endpoint)
+# Default: 9090
+# metrics_port: 9090
+
+# Metrics path
+# Default: /metrics
+# metrics_path: /metrics
+
+# Health check endpoint
+# Default: false
+enable_health_check: false
+
+# Health check port
+# Default: 9091
+# health_check_port: 9091
+
+# Advanced Settings
+# =================
+
+# Enable debug mode
+# Provides more verbose logging and error messages
+# Default: false
+debug: false
+
+# Enable profiling
+# Useful for performance analysis
+# Default: false
+enable_profiling: false
+
+# Profile output directory
+# Default: /tmp/derpy-profiles
+# profile_dir: /tmp/derpy-profiles
+
+# Enable request tracing
+# Logs detailed information about each request
+# Default: false
+trace_requests: false
+
+# Maximum request size (bytes)
+# Prevents memory exhaustion from large requests
+# Default: 10485760 (10 MB)
+max_request_size: 10485760
+
+# Maximum response size (bytes)
+# Default: 104857600 (100 MB)
+max_response_size: 104857600
+
+# Example Configurations for Different Scenarios
+# ===============================================
+
+# High-Performance Server:
+# max_workers: 16
+# max_concurrent_downloads: 8
+# socket_buffer_size: 16384
+# max_cache_size: 51200  # 50 GB
+
+# Development Environment:
+# log_level: DEBUG
+# debug: true
+# trace_requests: true
+# build_timeout: 7200  # 2 hours for slow builds
+
+# Secure Production Environment:
+# validate_credentials: true
+# sanitize_inputs: true
+# validate_paths: true
+# prevent_injection: true
+# drop_privileges: true
+# sanitize_logs: true
+# temp_dir_permissions: 0700
+
+# Resource-Constrained System:
+# max_workers: 2
+# max_concurrent_downloads: 2
+# max_cache_size: 2048  # 2 GB
+# build_timeout: 1800  # 30 minutes

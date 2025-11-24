@@ -40,6 +40,7 @@ dev = [
     "black>=23.0.0",
     "flake8>=6.0.0",
     "mypy>=1.0.0",
+    "hypothesis>=6.0.0",
 ]
 
 [project.urls]
@@ -50,6 +51,7 @@ Documentation = "https://derpy.readthedocs.io"
 
 [project.scripts]
 derpy = "derpy.cli.main:main"
+derpyd = "derpy.daemon.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

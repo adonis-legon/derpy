@@ -1,6 +1,13 @@
-# Derpy Example Dockerfiles
+# Derpy Examples
 
-This directory contains example Dockerfiles demonstrating various use cases with Derpy.
+This directory contains example Dockerfiles and daemon configuration files demonstrating various use cases with Derpy.
+
+## Contents
+
+- **Dockerfile Examples**: Sample Dockerfiles for building container images
+- **Daemon Examples** (`daemon/`): Configuration files and scripts for the Derpy daemon (derpyd)
+
+## Dockerfile Examples
 
 ## Build Isolation
 
@@ -139,11 +146,39 @@ If builds fail:
 3. Review error messages for specific issues
 4. Consult the main README.md troubleshooting section
 
+## Daemon Configuration Examples
+
+The `daemon/` directory contains example configuration files and scripts for the Derpy daemon (derpyd), which enables unprivileged users to build container images without sudo.
+
+### Available Daemon Examples
+
+1. **derpyd.service.example** - Comprehensive systemd service file with detailed comments
+2. **daemon-config.yaml.example** - Reference configuration showing all available options
+3. **setup-user.sh.example** - Customizable user setup script with automation examples
+
+See [daemon/README.md](daemon/README.md) for detailed documentation and usage instructions.
+
+### Quick Start with Daemon Examples
+
+```bash
+# Copy and customize the service file
+sudo cp examples/daemon/derpyd.service.example /etc/systemd/system/derpyd.service
+
+# Reload and start
+sudo systemctl daemon-reload
+sudo systemctl enable derpyd
+sudo systemctl start derpyd
+
+# Add users with the example script
+sudo bash examples/daemon/setup-user.sh.example alice bob
+```
+
 ## Contributing Examples
 
 Have a useful example? Contributions are welcome! Please ensure:
 
-- Only use supported instructions (FROM, RUN, CMD)
+- Only use supported instructions (FROM, RUN, CMD) for Dockerfiles
 - Include a README.md explaining the example
 - Keep it simple and focused on one concept
 - Test the build before submitting
+- For daemon examples, include detailed comments explaining configuration options
