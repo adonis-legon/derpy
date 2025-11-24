@@ -69,13 +69,39 @@ Additional instructions will be added in future releases.
 
 ## Installation
 
-Install from PyPI:
+### For Regular Use (Non-Daemon)
+
+Install from PyPI using pipx (recommended) or pip:
 
 ```bash
+# Using pipx (recommended for Ubuntu 23.04+, Debian 12+)
+pipx install derpy-tool
+
+# Or using pip in a virtual environment
+python3 -m venv venv
+source venv/bin/activate
 pip install derpy-tool
 ```
 
+### For Daemon Setup (Linux Only)
+
+For daemon installation, you need system-wide access:
+
+```bash
+# Install pipx if not already installed
+sudo apt update
+sudo apt install -y pipx
+
+# Install derpy-tool system-wide
+sudo pipx install derpy-tool --global
+
+# Or on older distributions (Ubuntu 22.04)
+sudo pip install derpy-tool
+```
+
 The package is named `derpy-tool` on PyPI, but the command-line tool is simply `derpy`.
+
+**Note**: On modern Linux distributions (Ubuntu 23.04+, Debian 12+), pip is externally managed by the system package manager. Use `pipx` for isolated installation or `sudo pip` for system-wide installation (required for daemon setup).
 
 ## Quick Start
 
@@ -171,7 +197,13 @@ For distribution-specific installation notes and testing procedures, see the [Di
 1. **Install Derpy** (if not already installed):
 
 ```bash
-pip install derpy-tool
+# Using pipx (recommended for Ubuntu 23.04+, Debian 12+)
+sudo apt update
+sudo apt install -y pipx
+sudo pipx install derpy-tool --global
+
+# Or using pip on older distributions (Ubuntu 22.04)
+sudo pip install derpy-tool
 ```
 
 2. **View setup instructions**:
