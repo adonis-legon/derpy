@@ -21,16 +21,17 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
   - [Pushing Images](#pushing-images)
   - [Verbose and Debug Output](#verbose-and-debug-output)
   - [Getting Help](#getting-help)
+- [Examples](#examples)
+  - [Example Dockerfiles](#example-dockerfiles)
+  - [Authentication Examples](#authentication-examples)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
 - [Development](#development)
   - [Setting Up Development Environment](#setting-up-development-environment)
   - [Running Without Installation](#running-without-installation)
   - [Deactivating Virtual Environment](#deactivating-virtual-environment)
   - [Version Management](#version-management)
-- [Example Dockerfiles](#example-dockerfiles)
-- [Authentication Examples](#authentication-examples)
-- [Troubleshooting](#troubleshooting)
-- [FAQ](#faq)
-- [Development Status](#development-status)
+  - [Project Status](#project-status)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -828,21 +829,43 @@ The CI/CD pipeline will automatically test, build, publish to PyPI, and merge ba
 
 For detailed release instructions, see [CONTRIBUTING.md](CONTRIBUTING.md#release-process)
 
-````
+### Project Status
 
-4. The CI/CD pipeline will automatically build and publish to PyPI when merged to main.
+**Current Version: 0.2.1** - Alpha release with core functionality and daemon support.
 
-## Example Dockerfiles
+**Key Features:**
 
-### Simple Python Application
+- ✅ Core Dockerfile instructions (FROM, RUN, CMD, COPY, ADD, WORKDIR, ENV, EXPOSE, USER, LABEL)
+- ✅ OCI-compliant image building and distribution
+- ✅ Build isolation with chroot on Linux
+- ✅ Registry authentication (Docker Hub, private registries, AWS ECR)
+- ✅ Daemon architecture for unprivileged builds
+- ✅ Base image caching and management
+- ✅ Local image repository
+- ✅ Cross-platform support (Linux, macOS, Windows)
+
+**In Development:**
+
+- 🚧 Additional Dockerfile instructions (VOLUME, ENTRYPOINT, ARG, ONBUILD)
+- 🚧 Multi-stage builds
+- 🚧 Build caching and layer optimization
+- 🚧 Container runtime capabilities
+
+See the project roadmap and [CONTRIBUTING.md](CONTRIBUTING.md) for more information on planned features.
+
+## Examples
+
+### Example Dockerfiles
+
+#### Simple Python Application
 
 ```dockerfile
 FROM python:3.11-slim
 RUN pip install flask
 CMD ["python", "-m", "flask", "run"]
-````
+```
 
-### Basic Web Server
+#### Basic Web Server
 
 ```dockerfile
 FROM nginx:alpine
@@ -850,7 +873,7 @@ RUN echo "Hello from Derpy!" > /usr/share/nginx/html/index.html
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
-### Ubuntu with Package Installation
+#### Ubuntu with Package Installation
 
 ```dockerfile
 FROM ubuntu:22.04
@@ -859,7 +882,7 @@ RUN curl --version
 CMD ["/bin/bash"]
 ```
 
-### Alpine with Development Tools
+#### Alpine with Development Tools
 
 ```dockerfile
 FROM alpine:latest
@@ -870,9 +893,9 @@ CMD ["/bin/sh"]
 
 See the `examples/` directory for more sample Dockerfiles.
 
-## Authentication Examples
+### Authentication Examples
 
-### Docker Hub Authentication
+#### Docker Hub Authentication
 
 Docker Hub allows anonymous pulls for public images, but authenticated users get higher rate limits and access to private repositories.
 
@@ -895,7 +918,7 @@ derpy push myusername/myapp:latest
 derpy logout
 ```
 
-### Private Registry Authentication
+#### Private Registry Authentication
 
 For self-hosted or third-party private registries:
 
@@ -915,7 +938,7 @@ derpy push registry.example.com/myteam/myapp:v1.0
 derpy logout registry.example.com
 ```
 
-### AWS ECR Authentication
+#### AWS ECR Authentication
 
 Amazon Elastic Container Registry (ECR) uses temporary tokens for authentication:
 
@@ -934,7 +957,7 @@ derpy push 123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp:v1.0
 # Re-authenticate if you see authentication errors
 ```
 
-### CI/CD Pipeline Authentication
+#### CI/CD Pipeline Authentication
 
 For automated builds in CI/CD environments:
 
@@ -1609,10 +1632,6 @@ sudo journalctl -u derpyd -b
 - All operations are logged for audit purposes
 
 Only add trusted users to the `derpy` group.
-
-## Development Status
-
-This is version 0.1.0 - an alpha release focusing on core functionality. See the project roadmap for planned features and improvements.
 
 ## Contributing
 
