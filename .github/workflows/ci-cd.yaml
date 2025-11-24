@@ -214,3 +214,16 @@ jobs:
           git checkout main
           git merge --no-ff ${{ github.ref_name }} -m "Merge ${{ github.ref_name }} after successful release"
           git push origin main
+
+      # Step 4: Create and push version tag
+      - name: Create version tag
+        run: |
+          # Extract version from branch name (release/0.2.2 -> 0.2.2)
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#release/}"
+
+          # Create annotated tag
+          git tag -a "v${VERSION}" -m "Release version ${VERSION}"
+
+          # Push tag to repository
+          git push origin "v${VERSION}"
