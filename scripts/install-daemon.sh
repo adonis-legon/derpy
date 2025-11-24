@@ -106,6 +106,12 @@ else
     print_success "derpyd binary found at $(which derpyd)"
 fi
 
+# Create required directories
+print_info "Creating required directories..."
+mkdir -p /var/lib/derpy
+mkdir -p /root/.derpy
+print_success "Directories created"
+
 # Install systemd service file
 print_info "Installing systemd service file..."
 DERPYD_PATH=$(which derpyd)
