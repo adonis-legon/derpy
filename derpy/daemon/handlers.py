@@ -285,7 +285,8 @@ class RequestHandler:
         # Instantiate BuildEngine with isolation enabled
         # Use locks if provided for thread-safe access to shared resources
         try:
-            storage_manager = ImageManager()
+            # Use system-wide storage location for daemon
+            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
             
             # Wrap storage manager methods with locks if available
             if self.storage_lock:
@@ -439,8 +440,8 @@ class RequestHandler:
         logger.info("List request received")
         
         try:
-            # Get storage manager
-            storage_manager = ImageManager()
+            # Get storage manager - use system-wide storage location for daemon
+            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
             
             # List all local images with lock if available
             if self.storage_lock:
@@ -497,8 +498,8 @@ class RequestHandler:
             )
         
         try:
-            # Get storage manager
-            storage_manager = ImageManager()
+            # Get storage manager - use system-wide storage location for daemon
+            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
             
             # Remove the image with lock if available
             if self.storage_lock:
@@ -541,8 +542,8 @@ class RequestHandler:
         logger.info(f"Purge request received: force={request.force}")
         
         try:
-            # Get storage manager
-            storage_manager = ImageManager()
+            # Get storage manager - use system-wide storage location for daemon
+            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
             
             # Remove all images with lock if available
             if self.storage_lock:

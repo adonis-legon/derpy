@@ -109,7 +109,6 @@ fi
 # Create required directories
 print_info "Creating required directories..."
 mkdir -p /var/lib/derpy
-mkdir -p /root/.derpy
 print_success "Directories created"
 
 # Install systemd service file
@@ -155,8 +154,8 @@ StandardError=journal
 NoNewPrivileges=false
 PrivateTmp=yes
 ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/var/run /var/lib/derpy /root/.derpy
+ProtectHome=yes
+ReadWritePaths=/var/run /var/lib/derpy
 
 [Install]
 WantedBy=multi-user.target
