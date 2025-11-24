@@ -112,19 +112,16 @@ DERPYD_PATH=$(which derpyd)
 
 # Try to find the service file in multiple locations
 SERVICE_FILE=""
-SEARCH_PATHS=(
-    "$SCRIPT_DIR/systemd/derpyd.service"                                    # Local repo
-    "/usr/local/share/derpy/scripts/systemd/derpyd.service"                # System install
-    "/usr/share/derpy/scripts/systemd/derpyd.service"                      # Alternative system install
-    "$(python3 -c 'import derpy, os; print(os.path.dirname(derpy.__file__))' 2>/dev/null)/../scripts/systemd/derpyd.service"  # Package location
-)
 
-for path in "${SEARCH_PATHS[@]}"; do
-    if [ -f "$path" ]; then
-        SERVICE_FILE="$path"
-        break
-    fi
-done
+# Check local repo first
+if [ -f "$SCRIPT_DIR/systemd/derpyd.service" ]; then
+    SERVICE_FILE="$SCRIPT_DIR/systemd/derpyd.service"
+# Check system install locations
+elif [ -f "/usr/local/share/derpy/scripts/systemd/derpyd.service" ]; then
+    SERVICE_FILE="/usr/local/share/derpy/scripts/systemd/derpyd.service"
+elif [ -f "/usr/share/derpy/scripts/systemd/derpyd.service" ]; then
+    SERVICE_FILE="/usr/share/derpy/scripts/systemd/derpyd.service"
+fi
 
 if [ -n "$SERVICE_FILE" ]; then
     # Use the service file, substituting the derpyd path
@@ -132,7 +129,7 @@ if [ -n "$SERVICE_FILE" ]; then
     print_success "Service file installed to /etc/systemd/system/derpyd.service"
 else
     # Create the service file from embedded template
-    print_info "Creating systemd service file from template..."
+    print_info "Service file not found, creating from template..."
     cat > /etc/systemd/system/derpyd.service <<EOF
 [Unit]
 Description=Derpy Container Daemon
