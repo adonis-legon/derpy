@@ -60,23 +60,12 @@ else
     print_success "derpy group created"
 fi
 
-# Check if derpy-tool is already installed
-DERPY_INSTALLED=false
-DERPYD_AVAILABLE=false
-
-if python3 -c "import derpy" 2>/dev/null; then
-    DERPY_INSTALLED=true
-    print_success "derpy-tool package is already installed"
-fi
-
+# Check if derpyd binary is available
 if command -v derpyd &> /dev/null; then
-    DERPYD_AVAILABLE=true
     print_success "derpyd binary found at $(which derpyd)"
-fi
-
-# Install derpy package if needed
-if [ "$DERPY_INSTALLED" = false ] || [ "$DERPYD_AVAILABLE" = false ]; then
-    print_info "Installing derpy package..."
+else
+    # derpyd not found, need to install
+    print_info "derpyd binary not found, installing derpy package..."
     
     # Check if we're in a virtual environment
     if [ -n "$VIRTUAL_ENV" ]; then
