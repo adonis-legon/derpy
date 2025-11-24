@@ -230,6 +230,83 @@ If `source venv/bin/activate` doesn't work:
 - Try using the full path: `source /path/to/derpy/venv/bin/activate`
 - On Windows, use: `venv\Scripts\activate`
 
+## Release Process
+
+### Publishing a New Version
+
+Derpy uses an automated CI/CD pipeline that triggers on `release/*` branches. Here's how to publish a new version:
+
+#### 1. Update the Version
+
+Use the version management script to bump the version:
+
+```bash
+# Show current version
+python scripts/version.py show
+
+# Set a specific version
+python scripts/version.py set 0.2.1
+
+# Or bump automatically
+python scripts/version.py bump patch   # 0.2.0 -> 0.2.1
+python scripts/version.py bump minor   # 0.2.0 -> 0.3.0
+python scripts/version.py bump major   # 0.2.0 -> 1.0.0
+```
+
+This updates both `derpy/__init__.py` and `pyproject.toml`.
+
+#### 2. Create a Release Branch
+
+```bash
+# Create and checkout a release branch
+git checkout -b release/0.2.1
+
+# Add the version changes
+git add derpy/__init__.py pyproject.toml
+git commit -m "Bump version to 0.2.1"
+```
+
+#### 3. Push the Release Branch
+
+```bash
+# Push to trigger CI/CD
+git push origin release/0.2.1
+```
+
+#### 4. CI/CD Pipeline Runs Automatically
+
+The pipeline will:
+
+1. Run tests across Python 3.10-3.13
+2. Build the package (wheel and source distribution)
+3. Publish to PyPI
+4. Automatically merge the release branch back to main
+
+#### 5. Monitor the Release
+
+- Check the Actions tab on GitHub to monitor progress
+- If tests fail, fix issues and push to the same release branch
+- Once published to PyPI, the release branch merges to main automatically
+
+### Release Branch Workflow Benefits
+
+- **Main branch stays clean**: Push documentation and script updates to main without triggering releases
+- **Controlled releases**: Only `release/*` branches trigger the full CI/CD pipeline
+- **Automatic sync**: Successful releases automatically merge back to main
+- **Version safety**: CI/CD only runs when you explicitly create a release branch
+
+### Pre-Release Checklist
+
+Before creating a release branch:
+
+- [ ] All tests pass locally: `pytest`
+- [ ] Code is formatted: `black derpy tests`
+- [ ] No linting issues: `flake8 derpy tests`
+- [ ] Type checking passes: `mypy derpy`
+- [ ] Documentation is updated
+- [ ] CHANGELOG or release notes are prepared (if applicable)
+- [ ] Version number follows semantic versioning
+
 ## Questions?
 
 If you have questions or need help:

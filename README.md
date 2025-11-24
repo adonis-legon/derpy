@@ -806,19 +806,25 @@ The script automatically updates both `pyproject.toml` and `derpy/__init__.py` t
    python scripts/version.py bump minor
    ```
 
-2. Review the changes:
+2. Create a release branch:
 
    ```bash
-   git diff
-   ```
-
-3. Commit and push:
-
-   ```bash
+   git checkout -b release/0.2.0
    git add derpy/__init__.py pyproject.toml
    git commit -m "Bump version to 0.2.0"
-   git push
    ```
+
+3. Push the release branch to trigger CI/CD:
+
+   ```bash
+   git push origin release/0.2.0
+   ```
+
+The CI/CD pipeline will automatically test, build, publish to PyPI, and merge back to main.
+
+For detailed release instructions, see [CONTRIBUTING.md](CONTRIBUTING.md#release-process)
+
+````
 
 4. The CI/CD pipeline will automatically build and publish to PyPI when merged to main.
 
@@ -830,7 +836,7 @@ The script automatically updates both `pyproject.toml` and `derpy/__init__.py` t
 FROM python:3.11-slim
 RUN pip install flask
 CMD ["python", "-m", "flask", "run"]
-```
+````
 
 ### Basic Web Server
 
