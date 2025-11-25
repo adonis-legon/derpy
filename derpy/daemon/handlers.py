@@ -359,7 +359,7 @@ class RequestHandler:
             image = build_engine.build_image(build_context, request.tag)
             
             # Store image in local repository
-            storage_manager.store_image(request.tag, image)
+            storage_manager.store_image(image, request.tag)
             
             logger.info(f"Build completed successfully: {request.tag}")
             
