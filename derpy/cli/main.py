@@ -278,8 +278,16 @@ def list_images(ctx, format: str):
                     
                     for img in response.images:
                         size_str = format_size(img.size)
-                        digest_short = img.digest[:12] if img.digest else "N/A"
-                        click.echo(f"{img.tag:<40} {size_str:<15} {img.created:<19} {digest_short}")
+                        # Format created timestamp consistently (remove microseconds and timezone)
+                        try:
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(img.created.replace('Z', '+00:00'))
+                            created_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                        except (ValueError, AttributeError):
+                            created_str = img.created[:19] if len(img.created) >= 19 else img.created
+                        # Show first 19 chars of digest (sha256:abc123...)
+                        digest_short = img.digest[:19] if img.digest else "N/A"
+                        click.echo(f"{img.tag:<40} {size_str:<15} {created_str:<19} {digest_short}")
                     
                     click.echo()
                     click.echo(f"Total: {len(response.images)} image(s)")
@@ -305,6 +313,7 @@ def list_images(ctx, format: str):
                         'tag': img.tag,
                         'size': img.size,
                         'created': img.created,
+                        'digest': img.digest,
                         'architecture': img.architecture,
                         'os': img.os
                     }
@@ -312,13 +321,23 @@ def list_images(ctx, format: str):
                 ]
                 click.echo(json.dumps(images_data, indent=2))
             else:
-                # Output as table
+                # Output as table (match daemon format)
                 click.echo()
-                click.echo(f"{'TAG':<40} {'SIZE':<10} {'CREATED':<19} {'PLATFORM'}")
-                click.echo("-" * 84)
+                click.echo(f"{'TAG':<40} {'SIZE':<15} {'CREATED':<19} {'DIGEST'}")
+                click.echo("-" * 100)
                 
                 for img in images:
-                    click.echo(str(img))
+                    size_str = format_size(img.size)
+                    # Format created timestamp consistently
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(img.created.replace('Z', '+00:00'))
+                        created_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                    except (ValueError, AttributeError):
+                        created_str = img.created[:19] if len(img.created) >= 19 else img.created
+                    # Show first 19 chars of digest (sha256:abc123...)
+                    digest_short = img.digest[:19] if img.digest else "N/A"
+                    click.echo(f"{img.tag:<40} {size_str:<15} {created_str:<19} {digest_short}")
                 
                 click.echo()
                 click.echo(f"Total: {len(images)} image(s)")
