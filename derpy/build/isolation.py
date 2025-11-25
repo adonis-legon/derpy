@@ -207,7 +207,8 @@ class IsolationExecutor:
         rootfs: Path,
         command: str,
         shell: str = "/bin/sh",
-        timeout: int = 300
+        timeout: int = 300,
+        env: Optional[List[str]] = None
     ) -> ExecutionResult:
         """Execute command in chrooted environment.
         
@@ -219,6 +220,7 @@ class IsolationExecutor:
             command: Command to execute
             shell: Shell to use (from base image), defaults to /bin/sh
             timeout: Command timeout in seconds, defaults to 300
+            env: Environment variables from base image config (e.g., ["PATH=/usr/bin:/bin"])
             
         Returns:
             ExecutionResult with stdout, stderr, exit_code, and duration
@@ -247,13 +249,32 @@ class IsolationExecutor:
             # Instead, we'll use chroot command or create a helper script
             
             # Use the chroot command to execute in the isolated environment
-            chroot_cmd = [
-                "chroot",
-                str(rootfs),
-                shell,
-                "-c",
-                command
-            ]
+            # If env vars provided, use 'env' command to set them in the chroot
+            if env:
+                # Build env command with all environment variables
+                env_args = []
+                for env_var in env:
+                    if '=' in env_var:
+                        env_args.append(env_var)
+                
+                chroot_cmd = [
+                    "chroot",
+                    str(rootfs),
+                    "env",
+                    "-i",  # Start with empty environment
+                    *env_args,  # Add base image env vars
+                    shell,
+                    "-c",
+                    command
+                ]
+            else:
+                chroot_cmd = [
+                    "chroot",
+                    str(rootfs),
+                    shell,
+                    "-c",
+                    command
+                ]
             
             # Check if we should stream output (verbose/debug mode)
             import logging
