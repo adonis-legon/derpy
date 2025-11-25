@@ -4,7 +4,6 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from derpy.core.config import Config, ConfigManager, BuildSettings, RegistryConfig
 from derpy.core.platform import (
     get_platform_info,
     normalize_path,
@@ -156,40 +155,6 @@ class TestFinalPush:
         if hasattr(config, 'exposed_ports'):
             assert len(config.exposed_ports) == 2
     
-    def test_config_manager_with_custom_path(self):
-        """Test ConfigManager with custom path."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            custom_path = Path(tmpdir) / "custom" / "config.yaml"
-            manager = ConfigManager(custom_path)
-            
-            config = manager.get_config()
-            assert config is not None
-            assert custom_path.exists()
-    
-    def test_build_settings_parallel_builds_true(self):
-        """Test BuildSettings with parallel_builds=True."""
-        settings = BuildSettings(parallel_builds=True)
-        assert settings.parallel_builds is True
-    
-    def test_build_settings_parallel_builds_false(self):
-        """Test BuildSettings with parallel_builds=False."""
-        settings = BuildSettings(parallel_builds=False)
-        assert settings.parallel_builds is False
-    
-    def test_registry_config_with_all_fields(self):
-        """Test RegistryConfig with all fields."""
-        config = RegistryConfig(
-            url="https://registry.example.com",
-            username="testuser",
-            password="testpass",
-            insecure=False
-        )
-        
-        assert config.url == "https://registry.example.com"
-        assert config.username == "testuser"
-        assert config.password == "testpass"
-        assert config.insecure is False
-    
     def test_platform_directories_are_paths(self):
         """Test platform directories return Path objects."""
         assert isinstance(get_config_dir(), Path)
@@ -312,35 +277,6 @@ class TestMoreCoverage:
         index = Index(schema_version=2, manifests=[])
         assert index.schema_version == 2
         assert len(index.manifests) == 0
-    
-    def test_config_images_path_is_path(self):
-        """Test Config images_path is Path object."""
-        config = Config.default()
-        assert isinstance(config.images_path, Path)
-    
-    def test_config_build_settings_is_build_settings(self):
-        """Test Config build_settings is BuildSettings."""
-        config = Config.default()
-        assert isinstance(config.build_settings, BuildSettings)
-    
-    def test_config_registry_configs_is_dict(self):
-        """Test Config registry_configs is dict."""
-        config = Config.default()
-        assert isinstance(config.registry_configs, dict)
-    
-    def test_build_settings_max_layers_range(self):
-        """Test BuildSettings max_layers accepts range."""
-        for max_layers in [1, 50, 100, 127]:
-            settings = BuildSettings(max_layers=max_layers)
-            assert settings.max_layers == max_layers
-    
-    def test_registry_config_insecure_variations(self):
-        """Test RegistryConfig insecure variations."""
-        config_secure = RegistryConfig(url="https://registry.example.com", insecure=False)
-        assert config_secure.insecure is False
-        
-        config_insecure = RegistryConfig(url="http://localhost:5000", insecure=True)
-        assert config_insecure.insecure is True
     
     def test_normalize_path_current_directory(self):
         """Test normalize_path with current directory."""

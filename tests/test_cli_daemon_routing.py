@@ -98,50 +98,44 @@ class TestNonPrivilegedCommandRouting:
                             mock_manager.calculate_storage_size.return_value = 1024
                             mock_manager.get_cache_size.return_value = 0
                     
-                    # Mock ConfigManager for purge command
-                    with patch('derpy.cli.main.ConfigManager') as mock_config_manager:
-                        mock_config = MagicMock()
-                        mock_config.build_settings.base_image_cache_dir = tmpdir
-                        mock_config_manager.return_value.get_config.return_value = mock_config
+                    # Run the CLI command
+                    runner = CliRunner()
+                    
+                    if command == 'ls':
+                        result = runner.invoke(cli_module.cli, ['ls'])
+                    elif command == 'rm':
+                        result = runner.invoke(cli_module.cli, ['rm', 'test:latest'])
+                    elif command == 'purge':
+                        result = runner.invoke(cli_module.cli, ['purge', '--force'])
+                    
+                    # Verify the command executed (may succeed or fail, but should not crash)
+                    # Exit code 0 or 1 is acceptable (1 for "not found" errors)
+                    assert result.exit_code in [0, 1], \
+                        f"Command should execute without crashing: {result.output}"
+                    
+                    # Verify routing behavior
+                    if daemon_available:
+                        # Should have checked daemon availability
+                        mock_client.is_available.assert_called()
                         
-                        # Run the CLI command
-                        runner = CliRunner()
-                        
+                        # Should have used daemon
                         if command == 'ls':
-                            result = runner.invoke(cli_module.cli, ['ls'])
+                            mock_client.send_list_request.assert_called_once()
                         elif command == 'rm':
-                            result = runner.invoke(cli_module.cli, ['rm', 'test:latest'])
+                            mock_client.send_remove_request.assert_called_once()
                         elif command == 'purge':
-                            result = runner.invoke(cli_module.cli, ['purge', '--force'])
+                            mock_client.send_purge_request.assert_called_once()
+                    else:
+                        # Should have checked daemon availability
+                        mock_client.is_available.assert_called()
                         
-                        # Verify the command executed (may succeed or fail, but should not crash)
-                        # Exit code 0 or 1 is acceptable (1 for "not found" errors)
-                        assert result.exit_code in [0, 1], \
-                            f"Command should execute without crashing: {result.output}"
-                        
-                        # Verify routing behavior
-                        if daemon_available:
-                            # Should have checked daemon availability
-                            mock_client.is_available.assert_called()
-                            
-                            # Should have used daemon
-                            if command == 'ls':
-                                mock_client.send_list_request.assert_called_once()
-                            elif command == 'rm':
-                                mock_client.send_remove_request.assert_called_once()
-                            elif command == 'purge':
-                                mock_client.send_purge_request.assert_called_once()
-                        else:
-                            # Should have checked daemon availability
-                            mock_client.is_available.assert_called()
-                            
-                            # Should have fallen back to direct execution
-                            if command == 'ls':
-                                mock_manager.list_local_images.assert_called()
-                            elif command == 'rm':
-                                mock_manager.remove_image.assert_called()
-                            elif command == 'purge':
-                                mock_manager.remove_all_images.assert_called()
+                        # Should have fallen back to direct execution
+                        if command == 'ls':
+                            mock_manager.list_local_images.assert_called()
+                        elif command == 'rm':
+                            mock_manager.remove_image.assert_called()
+                        elif command == 'purge':
+                            mock_manager.remove_all_images.assert_called()
     
     @given(
         command=st.sampled_from(['ls', 'rm', 'purge'])
@@ -182,38 +176,32 @@ class TestNonPrivilegedCommandRouting:
                     mock_manager.calculate_storage_size.return_value = 1024
                     mock_manager.get_cache_size.return_value = 0
                     
-                    # Mock ConfigManager
-                    with patch('derpy.cli.main.ConfigManager') as mock_config_manager:
-                        mock_config = MagicMock()
-                        mock_config.build_settings.base_image_cache_dir = tmpdir
-                        mock_config_manager.return_value.get_config.return_value = mock_config
-                        
-                        # Run the CLI command
-                        runner = CliRunner()
-                        
-                        if command == 'ls':
-                            result = runner.invoke(cli_module.cli, ['ls'])
-                        elif command == 'rm':
-                            result = runner.invoke(cli_module.cli, ['rm', 'test:latest'])
-                        elif command == 'purge':
-                            result = runner.invoke(cli_module.cli, ['purge', '--force'])
-                        
-                        # Verify the command executed without requiring sudo
-                        # The command should complete (exit code 0 or 1 for "not found")
-                        assert result.exit_code in [0, 1], \
-                            f"Command should execute without sudo: {result.output}"
-                        
-                        # Verify no sudo-related errors in output
-                        assert "sudo" not in result.output.lower(), \
-                            "Command should not require sudo for non-privileged operations"
-                        
-                        # Verify direct execution was used
-                        if command == 'ls':
-                            mock_manager.list_local_images.assert_called()
-                        elif command == 'rm':
-                            mock_manager.remove_image.assert_called()
-                        elif command == 'purge':
-                            mock_manager.remove_all_images.assert_called()
+                    # Run the CLI command
+                    runner = CliRunner()
+                    
+                    if command == 'ls':
+                        result = runner.invoke(cli_module.cli, ['ls'])
+                    elif command == 'rm':
+                        result = runner.invoke(cli_module.cli, ['rm', 'test:latest'])
+                    elif command == 'purge':
+                        result = runner.invoke(cli_module.cli, ['purge', '--force'])
+                    
+                    # Verify the command executed without requiring sudo
+                    # The command should complete (exit code 0 or 1 for "not found")
+                    assert result.exit_code in [0, 1], \
+                        f"Command should execute without sudo: {result.output}"
+                    
+                    # Verify no sudo-related errors in output
+                    assert "sudo" not in result.output.lower(), \
+                        "Command should not require sudo for non-privileged operations"
+                    
+                    # Verify direct execution was used
+                    if command == 'ls':
+                        mock_manager.list_local_images.assert_called()
+                    elif command == 'rm':
+                        mock_manager.remove_image.assert_called()
+                    elif command == 'purge':
+                        mock_manager.remove_all_images.assert_called()
     
     @given(
         daemon_available=st.booleans()

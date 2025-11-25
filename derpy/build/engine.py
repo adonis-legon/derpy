@@ -92,7 +92,7 @@ class BuildEngine:
     def __init__(
         self,
         storage_manager: Optional[ImageManager] = None,
-        enable_isolation: bool = True,
+        enable_isolation: Optional[bool] = None,
         base_image_cache_dir: Optional[Path] = None,
         chroot_timeout: int = 600
     ):
@@ -100,15 +100,26 @@ class BuildEngine:
         
         Args:
             storage_manager: Optional ImageManager for base image caching
-            enable_isolation: Whether to enable build isolation (default: True)
-            base_image_cache_dir: Directory for caching base images
-            chroot_timeout: Timeout for chroot command execution in seconds
+            enable_isolation: Whether to enable build isolation. If None, defaults to True on Linux, False elsewhere
+            base_image_cache_dir: Directory for caching base images. If None, uses platform-appropriate default
+            chroot_timeout: Timeout for chroot command execution in seconds (default: 600)
         """
         self.parser = DockerfileParser()
         self.from_handler = FromHandler()
         self.run_handler = RunHandler()
         self.cmd_handler = CmdHandler()
         self.layer_builder = LayerBuilder()
+        
+        # Use platform detection for enable_isolation default (Linux=True, others=False)
+        if enable_isolation is None:
+            enable_isolation = platform.system() == 'Linux'
+        
+        # Use platform-appropriate default for base_image_cache_dir if not provided
+        if base_image_cache_dir is None:
+            # For daemon mode, use /var/lib/derpy/cache/base-images
+            # For direct execution, use ~/.derpy/cache/base-images
+            # We'll default to user directory here; daemon will override when needed
+            base_image_cache_dir = Path.home() / '.derpy' / 'cache' / 'base-images'
         
         # Store configuration
         self.enable_isolation = enable_isolation

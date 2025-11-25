@@ -55,33 +55,6 @@ class TestCLIBasics:
         assert 'author' in result.output.lower()
 
 
-class TestConfigCommands:
-    """Tests for config commands."""
-    
-    def test_config_show(self):
-        """Test config show command."""
-        runner = CliRunner()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "config.yaml"
-            result = runner.invoke(cli, ['config', 'show'], env={'DERPY_CONFIG': str(config_path)})
-            # Command should work even if it shows default config
-            assert result.exit_code in [0, 1]  # May fail if config doesn't exist yet
-    
-    def test_config_set_images_path(self):
-        """Test config set for images_path."""
-        runner = CliRunner()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "config.yaml"
-            new_path = Path(tmpdir) / "images"
-            result = runner.invoke(
-                cli,
-                ['config', 'set', 'images_path', str(new_path)],
-                env={'DERPY_CONFIG': str(config_path)}
-            )
-            # May succeed or fail depending on config setup
-            assert result.exit_code in [0, 1]
-
-
 class TestBuildCommand:
     """Tests for build command."""
     

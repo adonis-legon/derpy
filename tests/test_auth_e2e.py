@@ -37,16 +37,16 @@ class TestDockerHubAnonymousPulls:
             mock_client_class.return_value.__enter__.return_value = mock_client
             
             # Simulate anonymous token authentication
-            from derpy.core.config import RegistryConfig
+            from derpy.registry.client import RegistryConfig
             config = RegistryConfig(
                 url='https://registry-1.docker.io',
-                username=None,
-                password=None
+                username='',
+                password=''
             )
             
-            # Verify config has no credentials
-            assert config.username is None
-            assert config.password is None
+            # Verify config has empty credentials (for anonymous access)
+            assert config.username == ''
+            assert config.password == ''
     
     def test_anonymous_pull_handles_rate_limits(self):
         """Test that anonymous pulls handle rate limit errors gracefully."""

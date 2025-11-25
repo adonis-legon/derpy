@@ -29,7 +29,7 @@ Testing:
 ```bash
 pytest                                    # Run all tests
 pytest --cov=derpy --cov-report=html     # With coverage
-pytest tests/test_config.py              # Specific file
+pytest tests/test_cli.py                 # Specific file
 pytest -m unit                           # Unit tests only
 pytest -m integration                    # Integration tests only
 ```
@@ -41,6 +41,13 @@ black derpy tests                        # Format code
 black --check derpy tests                # Check formatting
 flake8 derpy tests                       # Lint
 mypy derpy                               # Type check
+```
+
+Version management:
+
+```bash
+python scripts/version.py set 0.3.0      # Set version in all files
+python scripts/version.py get            # Get current version
 ```
 
 Running derpy:
@@ -79,18 +86,12 @@ derpy build . -f Dockerfile -t myapp:latest
 derpy push registry.example.com/myapp:latest
 ```
 
-## Configuration
+## Storage and Authentication
 
-- User config: `~/.derpy/config.yaml`
 - Registry credentials: `~/.derpy/auth.json` (file permissions: 0600)
-- Images stored: `~/.derpy/images/` (configurable)
-- Base image cache: `~/.derpy/cache/base-images/` (configurable)
-- Config managed via: `derpy config show/set` commands
+- Images stored (daemon mode): `/var/lib/derpy/images/`
+- Images stored (direct execution): `~/.derpy/images/`
+- Base image cache (daemon mode): `/var/lib/derpy/cache/base-images/`
+- Base image cache (direct execution): `~/.derpy/cache/base-images/`
 
-Build isolation settings:
-
-```bash
-derpy config set build_settings.enable_isolation true
-derpy config set build_settings.base_image_cache_dir /custom/cache/path
-derpy config set build_settings.chroot_timeout 600
-```
+Build isolation is automatically enabled on Linux systems and disabled on macOS/Windows. All settings use sensible defaults without requiring configuration.

@@ -21,28 +21,6 @@ class TestCLIMocked:
         assert 'version' in result.output.lower()
         assert 'author' in result.output.lower()
     
-    @patch('derpy.cli.main.ConfigManager')
-    def test_config_show_with_mock(self, mock_config_manager_class):
-        """Test config show with mocked ConfigManager."""
-        mock_manager = Mock()
-        mock_config = Mock()
-        mock_config.images_path = Path("/tmp/images")
-        mock_config.build_settings = Mock()
-        mock_config.build_settings.default_platform = "linux/amd64"
-        mock_config.build_settings.max_layers = 127
-        mock_config.build_settings.compression = "gzip"
-        mock_config.build_settings.parallel_builds = False
-        mock_config.registry_configs = {}
-        
-        mock_manager.get_config.return_value = mock_config
-        mock_config_manager_class.return_value = mock_manager
-        
-        runner = CliRunner()
-        result = runner.invoke(cli, ['config', 'show'])
-        
-        # Should succeed or show config
-        assert result.exit_code in [0, 1]
-    
     @patch('derpy.cli.main.BuildEngine')
     @patch('derpy.cli.main.ImageManager')
     def test_build_command_with_mock(self, mock_image_manager_class, mock_build_engine_class):
@@ -103,13 +81,6 @@ class TestCLIMocked:
         
         assert result.exit_code == 0
         assert 'dockerfile' in result.output.lower() or 'context' in result.output.lower()
-    
-    def test_config_help_command(self):
-        """Test config help command."""
-        runner = CliRunner()
-        result = runner.invoke(cli, ['config', '--help'])
-        
-        assert result.exit_code == 0
 
 
 class TestCLIErrorHandling:
