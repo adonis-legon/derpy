@@ -88,7 +88,7 @@ class DaemonClient:
         timeout: Default timeout for operations in seconds
     """
     
-    DEFAULT_TIMEOUT = 30.0  # 30 seconds default timeout
+    DEFAULT_TIMEOUT = 600.0  # 10 minutes default timeout for builds
     
     def __init__(
         self,
