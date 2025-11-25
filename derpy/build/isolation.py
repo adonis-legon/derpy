@@ -9,7 +9,7 @@ import platform
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 import shutil
 
 from derpy.core.exceptions import IsolationError, PlatformNotSupportedError
