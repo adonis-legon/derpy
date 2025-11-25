@@ -73,6 +73,7 @@ class ImageInfo:
     created: str
     architecture: str
     os: str
+    digest: Optional[str] = None
     
     def __str__(self) -> str:
         """String representation for display."""
@@ -368,7 +369,8 @@ class ImageManager:
                         size=metadata.size,
                         created=metadata.created,
                         architecture=metadata.architecture,
-                        os=metadata.os
+                        os=metadata.os,
+                        digest=metadata.manifest_digest
                     )
                     images.append(image_info)
                 except Exception as e:

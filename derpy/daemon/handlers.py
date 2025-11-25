@@ -462,7 +462,7 @@ class RequestHandler:
             for img in images:
                 protocol_img = ProtocolImageInfo(
                     tag=img.tag,
-                    digest="",  # Not available in storage ImageInfo
+                    digest=img.digest if img.digest else "",
                     size=img.size,
                     created=img.created
                 )
