@@ -106,14 +106,14 @@
   - Update **version** in derpy/**init**.py to "0.3.0"
   - _Requirements: 5.1, 5.2_
 
-- [-] 11. Create and push release branch
+- [x] 11. Create and push release branch
 
   - Create release/0.3.0 branch
   - Commit all changes with message "Release v0.3.0: Simplify configuration by removing per-user config"
   - Push release/0.3.0 branch to trigger CI/CD
   - _Requirements: 5.3, 5.4_
 
-- [ ] 12. Final Checkpoint - Verify release
+- [x] 12. Final Checkpoint - Verify release
   - Ensure CI/CD workflow completes successfully
   - Verify version 0.3.0 is published to PyPI
   - Verify release notes are accurate
