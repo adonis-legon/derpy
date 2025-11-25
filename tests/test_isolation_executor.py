@@ -148,6 +148,7 @@ class TestChrootSetup:
                     assert not mock_run.called
 
 
+@pytest.mark.skipif(platform.system() != "Linux", reason="Chroot execution requires Linux")
 class TestChrootExecution:
     """Tests for command execution in chroot."""
     
@@ -161,7 +162,7 @@ class TestChrootExecution:
             
             executor = IsolationExecutor()
             
-            with patch('subprocess.run') as mock_run:
+            with patch('derpy.build.isolation.subprocess.run') as mock_run:
                 mock_run.return_value = Mock(
                     returncode=0,
                     stdout="output",
@@ -185,7 +186,7 @@ class TestChrootExecution:
             
             executor = IsolationExecutor()
             
-            with patch('subprocess.run') as mock_run:
+            with patch('derpy.build.isolation.subprocess.run') as mock_run:
                 mock_run.return_value = Mock(
                     returncode=1,
                     stdout="",
@@ -208,7 +209,7 @@ class TestChrootExecution:
             
             executor = IsolationExecutor()
             
-            with patch('subprocess.run') as mock_run:
+            with patch('derpy.build.isolation.subprocess.run') as mock_run:
                 timeout_exc = subprocess.TimeoutExpired(
                     cmd="sleep 100",
                     timeout=5
@@ -233,7 +234,7 @@ class TestChrootExecution:
             
             executor = IsolationExecutor()
             
-            with patch('subprocess.run') as mock_run:
+            with patch('derpy.build.isolation.subprocess.run') as mock_run:
                 mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
                 
                 executor.execute_in_chroot(rootfs, "echo test", shell="/bin/bash")

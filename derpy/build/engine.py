@@ -634,12 +634,18 @@ class BuildEngine:
                 raise
             
             # Step 3: Execute command in chroot
+            # Get environment variables from base image config
+            env_vars = None
+            if self.base_image and self.base_image.config.config.env:
+                env_vars = self.base_image.config.config.env
+            
             try:
                 result = self.isolation_executor.execute_in_chroot(
                     rootfs=context.rootfs_path,
                     command=run_inst.command,
                     shell="/bin/sh",
-                    timeout=self.chroot_timeout
+                    timeout=self.chroot_timeout,
+                    env=env_vars
                 )
             except Exception as exec_error:
                 # IsolationError will have detailed message
