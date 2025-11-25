@@ -131,7 +131,7 @@ derpy push myapp:latest
 
 **Note**: If you have the daemon installed and are in the `derpy` group, builds run without sudo. Otherwise, use `sudo derpy build` for build isolation on Linux. See [Daemon vs Direct Execution](#daemon-vs-direct-execution) for details.
 
-Images are stored in a shared repository managed by the daemon at `/var/lib/derpy/images` (daemon mode) or `~/.derpy/images` (direct execution fallback).
+Images are stored in a shared repository at `/var/lib/derpy/images` (daemon mode) or per-user storage (direct execution fallback). Base image caches are stored separately at `/var/lib/derpy/cache/base-images/` (daemon mode) or per-user cache (direct execution fallback).
 
 ## Daemon vs Direct Execution
 
@@ -141,9 +141,9 @@ Derpy v0.2.0 introduces an optional daemon architecture that eliminates the need
 
 Derpy can operate in two modes:
 
-1. **Daemon Mode** (Recommended for Linux): The `derpyd` daemon runs as a privileged background service. Users in the `derpy` group can build images without sudo by communicating with the daemon via Unix socket. Images are stored in a shared repository at `/var/lib/derpy/images`.
+1. **Daemon Mode** (Recommended for Linux): The `derpyd` daemon runs as a privileged background service. Users in the `derpy` group can build images without sudo by communicating with the daemon via Unix socket. Images are stored in a shared repository at `/var/lib/derpy/images`, with base image caches at `/var/lib/derpy/cache/base-images/`.
 
-2. **Direct Execution Mode**: The CLI executes build operations directly, requiring sudo for build isolation on Linux. This is the fallback mode when the daemon is unavailable. Images are stored at `~/.derpy/images`.
+2. **Direct Execution Mode**: The CLI executes build operations directly, requiring sudo for build isolation on Linux. This is the fallback mode when the daemon is unavailable. Images and caches are stored in per-user directories.
 
 ### How the Daemon Works
 
@@ -1240,7 +1240,7 @@ chmod 755 ~/.derpy
 ls -la ~/.derpy
 ```
 
-**Note**: With daemon mode, images are stored in `/var/lib/derpy/images` which is managed by the daemon. In direct execution mode, images are stored in `~/.derpy/images`.
+**Note**: With daemon mode, images are stored in `/var/lib/derpy/images` and base image caches in `/var/lib/derpy/cache/base-images/`, both managed by the daemon. In direct execution mode, images and caches are stored in per-user directories.
 
 ### Registry Push Fails
 
@@ -1456,10 +1456,14 @@ ls -la ~/.derpy/auth.json
 
 ### Q: Where are images stored locally?
 
-**A**: Images are stored in a shared repository managed by the daemon:
+**A**: Storage locations depend on the execution mode:
 
-- **Daemon mode**: `/var/lib/derpy/images` (shared across all users)
-- **Direct execution**: `~/.derpy/images` (per-user storage)
+- **Daemon mode**:
+  - Images: `/var/lib/derpy/images` (shared across all users)
+  - Base image cache: `/var/lib/derpy/cache/base-images/` (shared)
+- **Direct execution**:
+  - Images: Per-user storage
+  - Base image cache: Per-user cache
 
 The CLI automatically uses the appropriate location based on whether the daemon is available.
 
