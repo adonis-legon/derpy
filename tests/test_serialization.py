@@ -4,7 +4,6 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from derpy.core.config import Config, ConfigManager, BuildSettings, RegistryConfig
 from derpy.oci.models import (
     Descriptor,
     Layer,
@@ -90,34 +89,6 @@ class TestReach70:
         
         assert len(image.layers) == 1
     
-    def test_config_manager_multiple_registries(self):
-        """Test ConfigManager with multiple registries."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "config.yaml"
-            manager = ConfigManager(config_path)
-            
-            # Add multiple registries
-            for i in range(5):
-                reg = RegistryConfig(url=f"https://registry{i}.example.com")
-                manager.add_registry(f"reg{i}", reg)
-            
-            config = manager.get_config()
-            assert len(config.registry_configs) == 5
-    
-    def test_build_settings_all_combinations(self):
-        """Test BuildSettings with various combinations."""
-        combinations = [
-            {"default_platform": "linux/amd64", "compression": "gzip", "parallel_builds": False},
-            {"default_platform": "linux/arm64", "compression": "none", "parallel_builds": True},
-            {"default_platform": "linux/amd64", "compression": "zstd", "parallel_builds": False},
-        ]
-        
-        for combo in combinations:
-            settings = BuildSettings(**combo)
-            assert settings.default_platform == combo["default_platform"]
-            assert settings.compression == combo["compression"]
-            assert settings.parallel_builds == combo["parallel_builds"]
-    
     def test_descriptor_from_dict_with_all_fields(self):
         """Test Descriptor from_dict with all fields."""
         data = {
@@ -199,33 +170,6 @@ class TestReach70:
             index = Index.from_dict(data)
             assert index.schema_version == 2
     
-    def test_config_with_multiple_registries(self):
-        """Test Config with multiple registries."""
-        config = Config.default()
-        
-        for i in range(3):
-            config.registry_configs[f"reg{i}"] = RegistryConfig(
-                url=f"https://registry{i}.example.com"
-            )
-        
-        assert len(config.registry_configs) == 3
-    
-    def test_registry_config_roundtrip_with_insecure(self):
-        """Test RegistryConfig roundtrip with insecure flag."""
-        original = RegistryConfig(
-            url="http://localhost:5000",
-            username="user",
-            password="pass",
-            insecure=True
-        )
-        
-        data = original.to_dict()
-        restored = RegistryConfig.from_dict(data)
-        
-        assert restored.url == original.url
-        assert restored.username == original.username
-        assert restored.password == original.password
-        assert restored.insecure == original.insecure
 
 
 if __name__ == "__main__":

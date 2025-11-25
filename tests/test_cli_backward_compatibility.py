@@ -75,8 +75,7 @@ class TestBackwardCompatibility:
                 else:
                     # Mock direct execution components
                     with patch('derpy.cli.main.BuildEngine') as mock_engine_class, \
-                         patch('derpy.cli.main.ImageManager') as mock_manager_class, \
-                         patch('derpy.cli.main.ConfigManager') as mock_config_class:
+                         patch('derpy.cli.main.ImageManager') as mock_manager_class:
                         
                         mock_engine = MagicMock()
                         mock_engine_class.return_value = mock_engine
@@ -87,13 +86,6 @@ class TestBackwardCompatibility:
                         
                         mock_manager = MagicMock()
                         mock_manager_class.return_value = mock_manager
-                        
-                        mock_config = MagicMock()
-                        mock_config.images_path = Path(tmpdir) / "images"
-                        mock_config.build_settings.enable_isolation = False
-                        mock_config.build_settings.base_image_cache_dir = tmpdir
-                        mock_config.build_settings.chroot_timeout = 300
-                        mock_config_class.return_value.get_config.return_value = mock_config
                         
                         runner = CliRunner()
                         
@@ -187,8 +179,7 @@ class TestBackwardCompatibility:
                 else:
                     # Mock direct execution
                     with patch('derpy.cli.main.BuildEngine') as mock_engine_class, \
-                         patch('derpy.cli.main.ImageManager') as mock_manager_class, \
-                         patch('derpy.cli.main.ConfigManager') as mock_config_class:
+                         patch('derpy.cli.main.ImageManager') as mock_manager_class:
                         
                         mock_engine = MagicMock()
                         mock_engine_class.return_value = mock_engine
@@ -199,13 +190,6 @@ class TestBackwardCompatibility:
                         
                         mock_manager = MagicMock()
                         mock_manager_class.return_value = mock_manager
-                        
-                        mock_config = MagicMock()
-                        mock_config.images_path = Path(tmpdir) / "images"
-                        mock_config.build_settings.enable_isolation = False
-                        mock_config.build_settings.base_image_cache_dir = tmpdir
-                        mock_config.build_settings.chroot_timeout = 300
-                        mock_config_class.return_value.get_config.return_value = mock_config
                         
                         runner = CliRunner()
                         
@@ -336,8 +320,7 @@ class TestBackwardCompatibility:
                     mock_client.send_purge_request.return_value = mock_response
                 else:
                     # Mock direct execution
-                    with patch('derpy.cli.main.ImageManager') as mock_manager_class, \
-                         patch('derpy.cli.main.ConfigManager') as mock_config_class:
+                    with patch('derpy.cli.main.ImageManager') as mock_manager_class:
                         
                         mock_manager = MagicMock()
                         mock_manager_class.return_value = mock_manager
@@ -345,10 +328,6 @@ class TestBackwardCompatibility:
                         mock_manager._load_metadata.return_value = {}
                         mock_manager.calculate_storage_size.return_value = 0
                         mock_manager.get_cache_size.return_value = 0
-                        
-                        mock_config = MagicMock()
-                        mock_config.build_settings.base_image_cache_dir = tmpdir
-                        mock_config_class.return_value.get_config.return_value = mock_config
                         
                         runner = CliRunner()
                         
@@ -434,7 +413,6 @@ class TestBackwardCompatibility:
             # Mock necessary components
             with patch.object(cli_module, 'DaemonClient') as mock_daemon_class, \
                  patch('derpy.cli.main.ImageManager') as mock_manager_class, \
-                 patch('derpy.cli.main.ConfigManager') as mock_config_class, \
                  patch('derpy.cli.main.AuthManager') as mock_auth_class, \
                  patch('derpy.cli.main.BuildEngine') as mock_engine_class:
                 
@@ -452,18 +430,6 @@ class TestBackwardCompatibility:
                 mock_manager.calculate_storage_size.return_value = 0
                 mock_manager.get_cache_size.return_value = 0
                 mock_manager.image_exists.return_value = False
-                
-                mock_config = MagicMock()
-                mock_config.images_path = Path(tmpdir) / "images"
-                mock_config.build_settings.enable_isolation = False
-                mock_config.build_settings.base_image_cache_dir = tmpdir
-                mock_config.build_settings.chroot_timeout = 300
-                mock_config.build_settings.default_platform = "linux/amd64"
-                mock_config.build_settings.max_layers = 128
-                mock_config.build_settings.compression = "gzip"
-                mock_config.build_settings.parallel_builds = False
-                mock_config.registry_configs = {}
-                mock_config_class.return_value.get_config.return_value = mock_config
                 
                 mock_auth = MagicMock()
                 mock_auth_class.return_value = mock_auth
@@ -493,51 +459,17 @@ class TestBackwardCompatibility:
 class TestConfigurationBackwardCompatibility:
     """Test that configuration file format remains unchanged."""
     
+    @pytest.mark.skip(reason="ConfigManager removed in v0.3.0 - config no longer used")
     def test_config_file_format_unchanged(self):
         """
         Verify that the configuration file format has not changed.
         
-        The daemon should not introduce new required configuration fields
-        that would break existing config files.
+        NOTE: This test is skipped because ConfigManager was removed in v0.3.0.
+        Configuration is now handled by the daemon with fixed paths.
         
         Validates: Requirements 7.1
         """
-        from derpy.core.config import ConfigManager
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "config.yaml"
-            
-            # Create a config file with v0.1.0 format
-            config_content = """
-images_path: ~/.derpy/images
-
-build_settings:
-  default_platform: linux/amd64
-  max_layers: 100
-  compression: gzip
-  parallel_builds: false
-  enable_isolation: true
-  base_image_cache_dir: ~/.derpy/cache/base-images
-  chroot_timeout: 300
-
-registry_configs: {}
-"""
-            config_path.write_text(config_content)
-            
-            # Load config with ConfigManager
-            config_manager = ConfigManager(config_path=config_path)
-            config = config_manager.get_config()
-            
-            # Verify all fields are loaded correctly
-            assert config.images_path == Path("~/.derpy/images").expanduser()
-            assert config.build_settings.default_platform == "linux/amd64"
-            assert config.build_settings.max_layers == 100
-            assert config.build_settings.compression == "gzip"
-            assert config.build_settings.parallel_builds is False
-            assert config.build_settings.enable_isolation is True
-            assert config.build_settings.base_image_cache_dir == "~/.derpy/cache/base-images"
-            assert config.build_settings.chroot_timeout == 300
-            assert config.registry_configs == {}
+        pass
     
     def test_image_storage_format_unchanged(self):
         """

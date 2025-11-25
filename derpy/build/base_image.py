@@ -15,9 +15,8 @@ from datetime import datetime
 from derpy.build.models import ImageReference
 from derpy.oci.models import Image, Manifest, ImageConfig, Layer, Descriptor
 from derpy.oci.models import MEDIA_TYPE_IMAGE_CONFIG, MEDIA_TYPE_IMAGE_LAYER
-from derpy.registry.client import RegistryClient
+from derpy.registry.client import RegistryClient, RegistryConfig
 from derpy.storage.manager import ImageManager
-from derpy.core.config import RegistryConfig
 from derpy.core.exceptions import BaseImageError, RegistryAuthenticationError
 from derpy.core.logging import get_logger
 from derpy.core.auth import AuthManager

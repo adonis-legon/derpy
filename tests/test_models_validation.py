@@ -4,7 +4,6 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from derpy.core.config import Config, ConfigManager, BuildSettings, RegistryConfig
 from derpy.core.platform import normalize_path, ensure_directory, join_paths
 from derpy.oci.models import (
     Descriptor,
@@ -80,16 +79,6 @@ class TestFinal70:
             errors = config.validate()
             assert isinstance(errors, list)
     
-    def test_config_manager_with_nested_path(self):
-        """Test ConfigManager with nested config path."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / "a" / "b" / "c" / "config.yaml"
-            manager = ConfigManager(config_path)
-            
-            config = manager.get_config()
-            assert config is not None
-            assert config_path.exists()
-    
     def test_normalize_path_with_env_var(self):
         """Test normalize_path with environment variable."""
         import os
@@ -153,45 +142,6 @@ class TestFinal70:
         if hasattr(config, 'to_dict'):
             data = config.to_dict()
             assert isinstance(data, dict)
-    
-    def test_build_settings_from_dict_partial(self):
-        """Test BuildSettings from_dict with partial data."""
-        data = {
-            'default_platform': 'linux/amd64',
-            'max_layers': 127
-        }
-        
-        if hasattr(BuildSettings, 'from_dict'):
-            settings = BuildSettings.from_dict(data)
-            assert settings.default_platform == 'linux/amd64'
-    
-    def test_registry_config_from_dict_minimal(self):
-        """Test RegistryConfig from_dict with minimal data."""
-        data = {
-            'url': 'https://registry.example.com'
-        }
-        
-        config = RegistryConfig.from_dict(data)
-        assert config.url == 'https://registry.example.com'
-        assert config.username is None
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
-
-
-class TestAbsoluteFinal:
-    """Absolute final tests to reach 70%."""
-    
-    def test_config_to_dict_complete(self):
-        """Test Config to_dict is complete."""
-        config = Config.default()
-        data = config.to_dict()
-        
-        assert 'images_path' in data
-        assert 'build_settings' in data
-        assert 'registry_configs' in data
     
     def test_ensure_directory_multiple_times(self):
         """Test calling ensure_directory multiple times."""

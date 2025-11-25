@@ -11,13 +11,12 @@ from pathlib import Path
 from typing import Optional
 
 from derpy import __version__, __author__
-from derpy.core.config import ConfigManager, ConfigError, RegistryConfig
 from derpy.core.auth import AuthManager
 from derpy.core.exceptions import AuthenticationError, InvalidCredentialsError
 from derpy.cli.banner import get_banner
 from derpy.build import BuildEngine, BuildContext, BuildError
 from derpy.storage import ImageManager, StorageError
-from derpy.registry import RegistryClient, RegistryError
+from derpy.registry import RegistryClient, RegistryConfig, RegistryError
 from derpy.core.exceptions import RegistryAuthenticationError
 from derpy.daemon.client import DaemonClient, DaemonConnectionError, DaemonTimeoutError, DaemonProtocolError
 
@@ -91,9 +90,6 @@ def cli(ctx, verbose: bool, debug: bool):
     # Setup logging based on flags
     from derpy.core.logging import setup_logging
     setup_logging(verbose=verbose, debug=debug)
-    
-    # Initialize config manager
-    ctx.obj['config_manager'] = ConfigManager()
 
 
 @cli.command()
@@ -101,136 +97,6 @@ def version():
     """Display version information with author and date."""
     click.echo(f"Version: {__version__}")
     click.echo(f"Author: {__author__}")
-
-
-@cli.group()
-@click.pass_context
-def config(ctx):
-    """Manage derpy configuration settings."""
-    pass
-
-
-@config.command(name='show')
-@click.option(
-    '--key',
-    help='Show specific configuration key (e.g., images_path, build_settings.compression)'
-)
-@click.pass_context
-def config_show(ctx, key: Optional[str]):
-    """Display current configuration settings."""
-    try:
-        config_manager = ctx.obj['config_manager']
-        cfg = config_manager.get_config()
-        
-        if key:
-            # Show specific key
-            parts = key.split('.')
-            value = cfg
-            
-            for part in parts:
-                if hasattr(value, part):
-                    value = getattr(value, part)
-                elif isinstance(value, dict) and part in value:
-                    value = value[part]
-                else:
-                    click.echo(f"Error: Configuration key '{key}' not found", err=True)
-                    ctx.exit(1)
-            
-            click.echo(f"{key}: {value}")
-        else:
-            # Show all configuration
-            click.echo("Current Configuration:")
-            click.echo(f"  Images Path: {cfg.images_path}")
-            click.echo(f"\nBuild Settings:")
-            click.echo(f"  Default Platform: {cfg.build_settings.default_platform}")
-            click.echo(f"  Max Layers: {cfg.build_settings.max_layers}")
-            click.echo(f"  Compression: {cfg.build_settings.compression}")
-            click.echo(f"  Parallel Builds: {cfg.build_settings.parallel_builds}")
-            click.echo(f"  Enable Isolation: {cfg.build_settings.enable_isolation}")
-            click.echo(f"  Base Image Cache Dir: {cfg.build_settings.base_image_cache_dir}")
-            click.echo(f"  Chroot Timeout: {cfg.build_settings.chroot_timeout}s")
-            
-            if cfg.registry_configs:
-                click.echo(f"\nRegistry Configurations:")
-                for name, reg_config in cfg.registry_configs.items():
-                    click.echo(f"  {name}:")
-                    click.echo(f"    URL: {reg_config.url}")
-                    click.echo(f"    Username: {reg_config.username or '(not set)'}")
-                    click.echo(f"    Insecure: {reg_config.insecure}")
-            else:
-                click.echo(f"\nRegistry Configurations: (none)")
-                
-    except ConfigError as e:
-        click.echo(f"Configuration error: {e}", err=True)
-        ctx.exit(1)
-    except Exception as e:
-        click.echo(f"Unexpected error: {e}", err=True)
-        ctx.exit(1)
-
-
-@config.command(name='set')
-@click.argument('key')
-@click.argument('value')
-@click.pass_context
-def config_set(ctx, key: str, value: str):
-    """
-    Set a configuration value.
-    
-    Examples:
-    
-      derpy config set images_path /path/to/images
-      
-      derpy config set build_settings.compression gzip
-      
-      derpy config set build_settings.max_layers 100
-      
-      derpy config set build_settings.parallel_builds true
-    """
-    try:
-        config_manager = ctx.obj['config_manager']
-        cfg = config_manager.get_config()
-        
-        # Parse the key path
-        parts = key.split('.')
-        
-        if parts[0] == 'images_path':
-            # Update images path
-            config_manager.update_images_path(Path(value))
-            click.echo(f"Updated images_path to: {value}")
-            
-        elif parts[0] == 'build_settings' and len(parts) == 2:
-            # Update build settings
-            setting_key = parts[1]
-            
-            # Convert value to appropriate type
-            if setting_key in ('max_layers', 'chroot_timeout'):
-                try:
-                    typed_value = int(value)
-                except ValueError:
-                    click.echo(f"Error: {setting_key} must be an integer", err=True)
-                    ctx.exit(1)
-            elif setting_key in ('parallel_builds', 'enable_isolation'):
-                typed_value = value.lower() in ('true', 'yes', '1', 'on')
-            elif setting_key in ('default_platform', 'compression', 'base_image_cache_dir'):
-                typed_value = value
-            else:
-                click.echo(f"Error: Unknown build setting '{setting_key}'", err=True)
-                ctx.exit(1)
-            
-            config_manager.update_build_settings(**{setting_key: typed_value})
-            click.echo(f"Updated build_settings.{setting_key} to: {typed_value}")
-            
-        else:
-            click.echo(f"Error: Configuration key '{key}' is not supported for modification", err=True)
-            click.echo("Supported keys: images_path, build_settings.<setting>")
-            ctx.exit(1)
-            
-    except ConfigError as e:
-        click.echo(f"Configuration error: {e}", err=True)
-        ctx.exit(1)
-    except Exception as e:
-        click.echo(f"Unexpected error: {e}", err=True)
-        ctx.exit(1)
 
 
 @cli.command()
@@ -322,21 +188,16 @@ def build(ctx, context: Path, dockerfile: Path, tag: str):
                 dockerfile_path=dockerfile_path
             )
             
-            # Load configuration
-            config_manager = ConfigManager()
-            config = config_manager.get_config()
-            
             # Create storage manager for base image caching
-            storage_manager = ImageManager(config.images_path)
+            storage_manager = ImageManager()
             
             # Build image
             click.echo("Parsing Dockerfile...")
-            build_engine = BuildEngine(
-                storage_manager=storage_manager,
-                enable_isolation=config.build_settings.enable_isolation,
-                base_image_cache_dir=Path(config.build_settings.base_image_cache_dir).expanduser(),
-                chroot_timeout=config.build_settings.chroot_timeout
-            )
+            # BuildEngine now uses hardcoded defaults:
+            # - enable_isolation: True on Linux, False elsewhere (platform detection)
+            # - base_image_cache_dir: ~/.derpy/cache/base-images
+            # - chroot_timeout: 600 seconds
+            build_engine = BuildEngine(storage_manager=storage_manager)
             
             click.echo("Executing build instructions...")
             image = build_engine.build_image(build_context, tag)
@@ -585,10 +446,8 @@ def purge(ctx, force: bool):
             # Execute directly (non-privileged operation)
             image_manager = ImageManager()
             
-            # Load configuration to get cache directory
-            config_manager = ConfigManager()
-            config = config_manager.get_config()
-            cache_dir = Path(config.build_settings.base_image_cache_dir).expanduser()
+            # Use hardcoded default cache directory
+            cache_dir = Path('~/.derpy/cache/base-images').expanduser()
             
             # Calculate storage size and cache size before removal
             storage_size = image_manager.calculate_storage_size()
@@ -909,10 +768,6 @@ def push(ctx, image: str, registry: Optional[str], username: Optional[str],
       derpy push myapp:latest --username myuser --password mypass
     """
     try:
-        # Get configuration
-        config_manager = ctx.obj['config_manager']
-        config = config_manager.get_config()
-        
         # Parse registry from image tag
         registry_url = None
         repository = image

@@ -13,7 +13,6 @@ import shutil
 
 from derpy.oci.models import Image, Manifest, ImageConfig
 from derpy.oci.layout import OCILayoutManager
-from derpy.core.config import ConfigManager
 from derpy.core.platform import normalize_path
 from derpy.core.exceptions import (
     StorageError,
@@ -125,12 +124,14 @@ class ImageManager:
         """Initialize ImageManager.
         
         Args:
-            repository_path: Path to local repository. If None, uses config.
+            repository_path: Path to local repository. If None, uses default path.
+                           Daemon mode: /var/lib/derpy/images (passed explicitly)
+                           Direct execution: ~/.derpy/images (default)
         """
         if repository_path is None:
-            config_manager = ConfigManager()
-            config = config_manager.load_config()
-            repository_path = config.images_path
+            # Use hardcoded default path for direct execution
+            # Daemon will pass /var/lib/derpy/images explicitly
+            repository_path = Path.home() / '.derpy' / 'images'
         
         self.repository_path = normalize_path(repository_path)
         self.metadata_path = self.repository_path / self.METADATA_FILE

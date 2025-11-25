@@ -1,6 +1,6 @@
 Derpy is an independent container tool that builds, manages, and distributes OCI-compliant container images without depending on Docker, Podman, containerd, or any other container runtime. It's a Python CLI application that implements container functionality from scratch while maintaining full OCI compliance for interoperability with existing container ecosystems.
 
-Version 0.1.0 (alpha) supports core Dockerfile instructions (FROM, RUN, CMD) and provides essential functionality for building images, managing a local repository, and pushing to OCI-compliant registries. The tool works cross-platform on Windows, Linux, and macOS.
+Version 0.3.0 supports core Dockerfile instructions (FROM, RUN, CMD) and provides essential functionality for building images, managing a local repository, and pushing to OCI-compliant registries. The tool works cross-platform on Windows, Linux, and macOS with a simplified, configuration-free design.
 
 ## Registry Authentication Feature
 
@@ -66,11 +66,12 @@ Derpy includes build isolation support on Linux systems, enabling real-world con
 - Root privileges (sudo) or CAP_SYS_CHROOT capability
 - Enabled by default on Linux, automatically disabled on macOS/Windows
 
-**Configuration:**
+**Default Settings:**
 
-- `build_settings.enable_isolation`: Enable/disable isolation (default: true)
-- `build_settings.base_image_cache_dir`: Cache directory for base images (default: ~/.derpy/cache/base-images)
-- `build_settings.chroot_timeout`: Timeout for chroot commands in seconds (default: 300)
+- Build isolation: Automatically enabled on Linux, disabled on macOS/Windows
+- Base image cache (daemon mode): `/var/lib/derpy/cache/base-images/`
+- Base image cache (direct execution): `~/.derpy/cache/base-images/`
+- Chroot timeout: 600 seconds (10 minutes)
 
 **Fallback behavior:**
 When isolation is unavailable (non-Linux, no root, or disabled), derpy falls back to v0.1.0 behavior where RUN commands execute on the host system. This limits functionality to simple commands that don't depend on base image filesystems.

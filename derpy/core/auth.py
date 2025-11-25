@@ -374,8 +374,7 @@ class AuthManager:
             InvalidCredentialsError: If credentials are invalid
         """
         try:
-            from derpy.core.config import RegistryConfig
-            from derpy.registry.client import RegistryClient
+            from derpy.registry.client import RegistryClient, RegistryConfig
             import requests
             
             # Construct registry URL with scheme

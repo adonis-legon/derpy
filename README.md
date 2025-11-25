@@ -13,7 +13,6 @@ Derpy is an independent container tool that does not depend on Docker, Podman, c
 - [Quick Start](#quick-start)
 - [Daemon vs Direct Execution](#daemon-vs-direct-execution)
 - [Usage](#usage)
-  - [Configuration Management](#configuration-management)
   - [Authentication](#authentication)
   - [Building Images](#building-images)
   - [Listing Images](#listing-images)
@@ -132,6 +131,8 @@ derpy push myapp:latest
 
 **Note**: If you have the daemon installed and are in the `derpy` group, builds run without sudo. Otherwise, use `sudo derpy build` for build isolation on Linux. See [Daemon vs Direct Execution](#daemon-vs-direct-execution) for details.
 
+Images are stored in a shared repository managed by the daemon at `/var/lib/derpy/images` (daemon mode) or `~/.derpy/images` (direct execution fallback).
+
 ## Daemon vs Direct Execution
 
 Derpy v0.2.0 introduces an optional daemon architecture that eliminates the need for sudo on every build command. This section explains how the daemon works, when it's used, and how to set it up.
@@ -140,9 +141,9 @@ Derpy v0.2.0 introduces an optional daemon architecture that eliminates the need
 
 Derpy can operate in two modes:
 
-1. **Daemon Mode** (Recommended for Linux): The `derpyd` daemon runs as a privileged background service. Users in the `derpy` group can build images without sudo by communicating with the daemon via Unix socket.
+1. **Daemon Mode** (Recommended for Linux): The `derpyd` daemon runs as a privileged background service. Users in the `derpy` group can build images without sudo by communicating with the daemon via Unix socket. Images are stored in a shared repository at `/var/lib/derpy/images`.
 
-2. **Direct Execution Mode**: The CLI executes build operations directly, requiring sudo for build isolation on Linux. This is the fallback mode when the daemon is unavailable.
+2. **Direct Execution Mode**: The CLI executes build operations directly, requiring sudo for build isolation on Linux. This is the fallback mode when the daemon is unavailable. Images are stored at `~/.derpy/images`.
 
 ### How the Daemon Works
 
@@ -405,43 +406,6 @@ The daemon architecture is designed with security in mind:
 See the [Troubleshooting](#troubleshooting) section for common daemon-related issues and solutions.
 
 ## Usage
-
-### Configuration Management
-
-View current configuration:
-
-```bash
-derpy config show
-```
-
-Set configuration values:
-
-```bash
-derpy config set images_path /custom/path/to/images
-```
-
-Configuration is stored in `~/.derpy/config.yaml`
-
-#### Build Isolation Configuration
-
-Configure build isolation behavior (Linux only):
-
-```bash
-# Disable isolation (use v0.1.0 behavior)
-derpy config set build_settings.enable_isolation false
-
-# Set base image cache directory
-derpy config set build_settings.base_image_cache_dir /custom/cache/path
-
-# Set chroot command timeout (seconds) - increase for slow operations
-derpy config set build_settings.chroot_timeout 900
-```
-
-Configuration options:
-
-- `enable_isolation`: Enable/disable build isolation (default: true on Linux, false elsewhere)
-- `base_image_cache_dir`: Directory for caching downloaded base images (default: ~/.derpy/cache/base-images)
-- `chroot_timeout`: Maximum time in seconds for RUN commands in chroot (default: 600)
 
 ### Authentication
 
@@ -1164,14 +1128,7 @@ ls -la ~/.derpy/cache/base-images/
 sudo ls -la /root/.derpy/
 ```
 
-3. **Check if daemon is using correct configuration**:
-
-```bash
-# Daemon uses root's config by default
-sudo derpy config show
-```
-
-4. **Try rebuilding with verbose output**:
+3. **Try rebuilding with verbose output**:
 
 ```bash
 derpy -v build . -f Dockerfile -t myapp:latest
@@ -1281,10 +1238,9 @@ derpy build /path/to/context -f Dockerfile -t myapp:latest
 # On macOS/Linux
 chmod 755 ~/.derpy
 ls -la ~/.derpy
-
-# Or specify a different path
-derpy config set images_path ~/custom/derpy/images
 ```
+
+**Note**: With daemon mode, images are stored in `/var/lib/derpy/images` which is managed by the daemon. In direct execution mode, images are stored in `~/.derpy/images`.
 
 ### Registry Push Fails
 
@@ -1500,11 +1456,12 @@ ls -la ~/.derpy/auth.json
 
 ### Q: Where are images stored locally?
 
-**A**: By default, images are stored in `~/.derpy/images/`. You can change this with:
+**A**: Images are stored in a shared repository managed by the daemon:
 
-```bash
-derpy config set images_path /your/custom/path
-```
+- **Daemon mode**: `/var/lib/derpy/images` (shared across all users)
+- **Direct execution**: `~/.derpy/images` (per-user storage)
+
+The CLI automatically uses the appropriate location based on whether the daemon is available.
 
 ### Q: What Python version is required?
 

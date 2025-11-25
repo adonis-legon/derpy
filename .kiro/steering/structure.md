@@ -5,9 +5,8 @@ derpy/
 ├── cli/              # CLI interface and commands
 │   ├── main.py       # Entry point, click commands
 │   └── banner.py     # ASCII banner display
-├── core/             # Core utilities and configuration
+├── core/             # Core utilities
 │   ├── auth.py       # Authentication management (AuthManager, RegistryCredentials)
-│   ├── config.py     # Configuration management (ConfigManager, Config models)
 │   ├── exceptions.py # Custom exception hierarchy
 │   ├── logging.py    # Logging setup
 │   └── platform.py   # Cross-platform path/directory utilities
@@ -54,5 +53,4 @@ scripts/              # Build and utility scripts
 - Test files: `test_*.py` with `Test*` classes and `test_*` functions
 - Test markers: `@pytest.mark.unit`, `@pytest.mark.integration`, `@pytest.mark.slow`
 - Error handling: Raise specific exceptions from derpy.core.exceptions
-- Configuration: Use ConfigManager for all config operations
 - Platform paths: Use derpy.core.platform utilities for cross-platform compatibility

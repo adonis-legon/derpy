@@ -1,8 +1,7 @@
 """Tests for registry client."""
 
 import pytest
-from derpy.registry.client import RegistryClient, RegistryError
-from derpy.core.config import RegistryConfig
+from derpy.registry.client import RegistryClient, RegistryConfig, RegistryError
 
 
 class TestRegistryClient:
@@ -10,7 +9,7 @@ class TestRegistryClient:
     
     def test_registry_client_initialization(self):
         """Test creating RegistryClient instance."""
-        config = RegistryConfig(url="https://registry.example.com")
+        config = RegistryConfig(url="https://registry.example.com", username="user", password="pass")
         client = RegistryClient(config)
         assert client is not None
         assert hasattr(client, 'config')
@@ -31,6 +30,8 @@ class TestRegistryClient:
         """Test RegistryClient with insecure flag."""
         config = RegistryConfig(
             url="http://localhost:5000",
+            username="user",
+            password="pass",
             insecure=True
         )
         client = RegistryClient(config)
@@ -38,7 +39,7 @@ class TestRegistryClient:
     
     def test_registry_client_has_required_methods(self):
         """Test RegistryClient has required methods."""
-        config = RegistryConfig(url="https://registry.example.com")
+        config = RegistryConfig(url="https://registry.example.com", username="user", password="pass")
         client = RegistryClient(config)
         
         assert hasattr(client, 'check_connectivity')
@@ -51,7 +52,7 @@ class TestRegistryClient:
     
     def test_registry_client_context_manager(self):
         """Test RegistryClient as context manager."""
-        config = RegistryConfig(url="https://registry.example.com")
+        config = RegistryConfig(url="https://registry.example.com", username="user", password="pass")
         
         # Should support context manager protocol
         with RegistryClient(config) as client:

@@ -7,10 +7,10 @@ pulling container images to/from remote registries.
 import re
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse, urljoin
+from dataclasses import dataclass
 import requests
 from requests.auth import HTTPBasicAuth
 
-from derpy.core.config import RegistryConfig
 from derpy.core.exceptions import (
     RegistryError,
     RegistryConnectionError,
@@ -18,6 +18,15 @@ from derpy.core.exceptions import (
     ImagePushError
 )
 from derpy.core.logging import get_logger
+
+
+@dataclass
+class RegistryConfig:
+    """Registry configuration for client operations."""
+    url: str
+    username: str
+    password: str
+    insecure: bool = False
 
 
 class RegistryClient:

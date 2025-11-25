@@ -57,11 +57,11 @@ class RequestHandler:
         Args:
             storage_lock: Threading lock for storage operations (optional)
             base_image_cache_lock: Threading lock for base image cache operations (optional)
-            repository_path: Path to image repository (defaults to /var/lib/derpy for daemon)
+            repository_path: Path to image repository (defaults to /var/lib/derpy/images for daemon)
         """
         self.storage_lock = storage_lock
         self.base_image_cache_lock = base_image_cache_lock
-        self.repository_path = repository_path or Path("/var/lib/derpy")
+        self.repository_path = repository_path or Path("/var/lib/derpy/images")
     
     def handle_request(
         self,
@@ -298,9 +298,13 @@ class RequestHandler:
                         return original_store(image, tag)
                 storage_manager.store_image = locked_store
             
+            # Use daemon-specific cache directory for base images
+            daemon_cache_dir = Path("/var/lib/derpy/cache/base-images")
+            
             build_engine = BuildEngine(
                 storage_manager=storage_manager,
-                enable_isolation=True
+                enable_isolation=True,
+                base_image_cache_dir=daemon_cache_dir
             )
             
             # Wrap base image manager methods with locks if available

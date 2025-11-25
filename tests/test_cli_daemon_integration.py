@@ -151,17 +151,9 @@ class TestFallbackBehavior:
                 
                 # Mock the direct execution components
                 with patch('derpy.cli.main.BuildEngine') as MockBuildEngine, \
-                     patch('derpy.cli.main.ImageManager') as MockImageManager, \
-                     patch('derpy.cli.main.ConfigManager') as MockConfigManager:
+                     patch('derpy.cli.main.ImageManager') as MockImageManager:
                     
                     # Setup mocks for direct execution
-                    mock_config = Mock()
-                    mock_config.images_path = Path(tmpdir) / "images"
-                    mock_config.build_settings.enable_isolation = False
-                    mock_config.build_settings.base_image_cache_dir = str(Path(tmpdir) / "cache")
-                    mock_config.build_settings.chroot_timeout = 300
-                    MockConfigManager.return_value.get_config.return_value = mock_config
-                    
                     mock_image = Mock()
                     mock_image.layers = [Mock(), Mock()]
                     mock_engine = Mock()
@@ -231,17 +223,9 @@ class TestFallbackBehavior:
                 
                 # Mock the direct execution components
                 with patch('derpy.cli.main.BuildEngine') as MockBuildEngine, \
-                     patch('derpy.cli.main.ImageManager') as MockImageManager, \
-                     patch('derpy.cli.main.ConfigManager') as MockConfigManager:
+                     patch('derpy.cli.main.ImageManager') as MockImageManager:
                     
                     # Setup mocks for direct execution
-                    mock_config = Mock()
-                    mock_config.images_path = Path(tmpdir) / "images"
-                    mock_config.build_settings.enable_isolation = False
-                    mock_config.build_settings.base_image_cache_dir = str(Path(tmpdir) / "cache")
-                    mock_config.build_settings.chroot_timeout = 300
-                    MockConfigManager.return_value.get_config.return_value = mock_config
-                    
                     mock_image = Mock()
                     mock_image.layers = [Mock(), Mock()]
                     mock_engine = Mock()
