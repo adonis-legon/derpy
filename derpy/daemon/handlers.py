@@ -51,15 +51,17 @@ class RequestHandler:
         base_image_cache_lock: Lock for coordinating base image cache access (optional)
     """
     
-    def __init__(self, storage_lock=None, base_image_cache_lock=None):
+    def __init__(self, storage_lock=None, base_image_cache_lock=None, repository_path=None):
         """Initialize request handler.
         
         Args:
             storage_lock: Threading lock for storage operations (optional)
             base_image_cache_lock: Threading lock for base image cache operations (optional)
+            repository_path: Path to image repository (defaults to /var/lib/derpy for daemon)
         """
         self.storage_lock = storage_lock
         self.base_image_cache_lock = base_image_cache_lock
+        self.repository_path = repository_path or Path("/var/lib/derpy")
     
     def handle_request(
         self,
@@ -285,8 +287,8 @@ class RequestHandler:
         # Instantiate BuildEngine with isolation enabled
         # Use locks if provided for thread-safe access to shared resources
         try:
-            # Use system-wide storage location for daemon
-            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
+            # Use configured repository path (system-wide for daemon, temp for tests)
+            storage_manager = ImageManager(repository_path=self.repository_path)
             
             # Wrap storage manager methods with locks if available
             if self.storage_lock:
@@ -440,8 +442,8 @@ class RequestHandler:
         logger.info("List request received")
         
         try:
-            # Get storage manager - use system-wide storage location for daemon
-            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
+            # Get storage manager - use configured repository path
+            storage_manager = ImageManager(repository_path=self.repository_path)
             
             # List all local images with lock if available
             if self.storage_lock:
@@ -498,8 +500,8 @@ class RequestHandler:
             )
         
         try:
-            # Get storage manager - use system-wide storage location for daemon
-            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
+            # Get storage manager - use configured repository path
+            storage_manager = ImageManager(repository_path=self.repository_path)
             
             # Remove the image with lock if available
             if self.storage_lock:
@@ -542,8 +544,8 @@ class RequestHandler:
         logger.info(f"Purge request received: force={request.force}")
         
         try:
-            # Get storage manager - use system-wide storage location for daemon
-            storage_manager = ImageManager(repository_path=Path("/var/lib/derpy"))
+            # Get storage manager - use configured repository path
+            storage_manager = ImageManager(repository_path=self.repository_path)
             
             # Remove all images with lock if available
             if self.storage_lock:

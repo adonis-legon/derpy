@@ -8,6 +8,8 @@ Validates: Requirements 3.1, 3.4
 """
 
 import pytest
+import tempfile
+from pathlib import Path
 from hypothesis import given, strategies as st, settings
 from derpy.daemon.handlers import RequestHandler
 from derpy.daemon.protocol import (
@@ -25,14 +27,20 @@ from derpy.daemon.protocol import (
 class TestRequestHandler:
     """Tests for RequestHandler class."""
     
-    def test_create_request_handler(self):
+    @pytest.fixture
+    def temp_repo(self):
+        """Create a temporary repository for testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+    
+    def test_create_request_handler(self, temp_repo):
         """Test creating a request handler."""
-        handler = RequestHandler()
+        handler = RequestHandler(repository_path=temp_repo)
         assert handler is not None
     
-    def test_handle_build_request_stub(self):
+    def test_handle_build_request_stub(self, temp_repo):
         """Test handling a build request (stub implementation)."""
-        handler = RequestHandler()
+        handler = RequestHandler(repository_path=temp_repo)
         request = BuildRequest(
             context_path="/path/to/context",
             dockerfile_path="/path/to/Dockerfile",
@@ -45,9 +53,9 @@ class TestRequestHandler:
         assert response.success is False
         assert response.error_message is not None
     
-    def test_handle_list_request(self):
+    def test_handle_list_request(self, temp_repo):
         """Test handling a list request."""
-        handler = RequestHandler()
+        handler = RequestHandler(repository_path=temp_repo)
         request = ListRequest()
         response = handler.handle_request(request)
         
@@ -55,9 +63,9 @@ class TestRequestHandler:
         # Returns list of images (may be empty if no images stored)
         assert isinstance(response.images, list)
     
-    def test_handle_remove_request(self):
+    def test_handle_remove_request(self, temp_repo):
         """Test handling a remove request."""
-        handler = RequestHandler()
+        handler = RequestHandler(repository_path=temp_repo)
         request = RemoveRequest(tag="nonexistent:latest")
         response = handler.handle_request(request)
         
@@ -67,9 +75,9 @@ class TestRequestHandler:
         assert response.error_message is not None
         assert "not found" in response.error_message.lower()
     
-    def test_handle_purge_request(self):
+    def test_handle_purge_request(self, temp_repo):
         """Test handling a purge request."""
-        handler = RequestHandler()
+        handler = RequestHandler(repository_path=temp_repo)
         request = PurgeRequest(force=True)
         response = handler.handle_request(request)
         
