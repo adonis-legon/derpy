@@ -193,13 +193,13 @@ class BuildResponse(BaseMessage):
     """Response from build operation.
     
     Attributes:
-        type: Response type identifier (always "build")
+        type: Response type identifier (always "build_response")
         success: Whether the build succeeded
         exit_code: Exit code from build process
         error_message: Error message if build failed
         image_digest: SHA256 digest of built image if successful
     """
-    type: str = "build"
+    type: str = "build_response"
     success: bool = False
     exit_code: int = 0
     error_message: Optional[str] = None
@@ -255,10 +255,10 @@ class ListResponse(BaseMessage):
     """Response from list images operation.
     
     Attributes:
-        type: Response type identifier (always "list")
+        type: Response type identifier (always "list_response")
         images: List of image information
     """
-    type: str = "list"
+    type: str = "list_response"
     images: List[ImageInfo] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -289,11 +289,11 @@ class RemoveResponse(BaseMessage):
     """Response from remove image operation.
     
     Attributes:
-        type: Response type identifier (always "remove")
+        type: Response type identifier (always "remove_response")
         success: Whether the removal succeeded
         error_message: Error message if removal failed
     """
-    type: str = "remove"
+    type: str = "remove_response"
     success: bool = False
     error_message: Optional[str] = None
     
@@ -316,12 +316,12 @@ class PurgeResponse(BaseMessage):
     """Response from purge all images operation.
     
     Attributes:
-        type: Response type identifier (always "purge")
+        type: Response type identifier (always "purge_response")
         success: Whether the purge succeeded
         removed_count: Number of images removed
         error_message: Error message if purge failed
     """
-    type: str = "purge"
+    type: str = "purge_response"
     success: bool = False
     removed_count: int = 0
     error_message: Optional[str] = None
@@ -379,9 +379,13 @@ class OutputMessage(BaseMessage):
 # Message type registry for deserialization
 MESSAGE_TYPES = {
     "build": BuildRequest,
+    "build_response": BuildResponse,
     "list": ListRequest,
+    "list_response": ListResponse,
     "remove": RemoveRequest,
+    "remove_response": RemoveResponse,
     "purge": PurgeRequest,
+    "purge_response": PurgeResponse,
     "output": OutputMessage,
     "error": OutputMessage,
     "progress": OutputMessage,
