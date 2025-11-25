@@ -193,11 +193,13 @@ class BuildResponse(BaseMessage):
     """Response from build operation.
     
     Attributes:
+        type: Response type identifier (always "build")
         success: Whether the build succeeded
         exit_code: Exit code from build process
         error_message: Error message if build failed
         image_digest: SHA256 digest of built image if successful
     """
+    type: str = "build"
     success: bool = False
     exit_code: int = 0
     error_message: Optional[str] = None
@@ -253,13 +255,16 @@ class ListResponse(BaseMessage):
     """Response from list images operation.
     
     Attributes:
+        type: Response type identifier (always "list")
         images: List of image information
     """
+    type: str = "list"
     images: List[ImageInfo] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
+            "type": self.type,
             "images": [img.to_dict() for img in self.images]
         }
     
@@ -284,9 +289,11 @@ class RemoveResponse(BaseMessage):
     """Response from remove image operation.
     
     Attributes:
+        type: Response type identifier (always "remove")
         success: Whether the removal succeeded
         error_message: Error message if removal failed
     """
+    type: str = "remove"
     success: bool = False
     error_message: Optional[str] = None
     
@@ -309,10 +316,12 @@ class PurgeResponse(BaseMessage):
     """Response from purge all images operation.
     
     Attributes:
+        type: Response type identifier (always "purge")
         success: Whether the purge succeeded
         removed_count: Number of images removed
         error_message: Error message if purge failed
     """
+    type: str = "purge"
     success: bool = False
     removed_count: int = 0
     error_message: Optional[str] = None
